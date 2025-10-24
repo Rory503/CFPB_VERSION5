@@ -62,5 +62,4 @@ temp/
 # Large data files (too big for GitHub)
 data/complaints.csv
 data/complaints_filtered.csv
-*.xlsx
 outputs/*.xlsx
