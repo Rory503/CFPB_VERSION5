@@ -4,6 +4,7 @@ Beautiful, interactive dashboard with real-time charts and data visualization
 """
 
 import streamlit as st
+from functools import lru_cache
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -43,60 +44,102 @@ except ImportError as e:
     FTCRealTriangulator = None
     CFPBDataExporter = None
 
-# Professional government dashboard styling
+# Clean, professional styling - No overlapping text
 st.markdown("""
 <style>
-    .main-header {
-        background: #003d7a;
-        padding: 1.5rem;
-        margin-bottom: 1rem;
-        color: white;
-        border-bottom: 3px solid #0066cc;
-    }
-    
-    .metric-box {
-        background: #f8f9fa;
-        border: 1px solid #e6e6e6;
-        padding: 1rem;
-        text-align: center;
-        margin-bottom: 1rem;
-    }
-    
-    .metric-large {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #003d7a;
-        margin: 0;
-    }
-    
-    .metric-label {
-        font-size: 0.9rem;
-        color: #666;
-        margin: 0;
-    }
-    
-    .sidebar .sidebar-content {
-        background: #f5f5f5;
-    }
-    
+    /* Clean button styling */
     .stButton > button {
         background: #003d7a;
         color: white;
         border: none;
-        padding: 0.5rem 1.5rem;
-        font-weight: normal;
+        padding: 0.6rem 1.2rem;
+        font-weight: 500;
         width: 100%;
+        margin: 0.4rem 0;
+        border-radius: 6px;
+        transition: all 0.2s;
     }
     
     .stButton > button:hover {
         background: #0066cc;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 102, 204, 0.3);
     }
     
-    .chart-title {
-        font-size: 1.1rem;
-        font-weight: bold;
-        color: #333;
+    /* Proper metrics spacing */
+    .stMetric {
+        background: #f8f9fa;
+        padding: 1.2rem;
+        border-radius: 8px;
+        border: 1px solid #e6e6e6;
+    }
+    
+    .stMetric label {
+        font-size: 0.9rem !important;
+        font-weight: 500 !important;
+        color: #666 !important;
+    }
+    
+    .stMetric [data-testid="stMetricValue"] {
+        font-size: 2rem !important;
+        font-weight: 700 !important;
+        color: #003d7a !important;
+    }
+    
+    /* Tab styling - improved for visibility */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.5rem;
+        background: #23263b;
+        padding: 0.5rem;
+        border-radius: 8px;
+        border: 1px solid #444;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        padding: 0.8rem 1.5rem;
+        font-size: 1rem;
+        font-weight: 600;
+        border-radius: 6px;
+        color: #222 !important;
+        background: #e6e8f0;
+        border: 1px solid #bbb;
+        margin-right: 0.2rem;
+        opacity: 1 !important;
+        transition: background 0.2s, color 0.2s;
+    }
+
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background: #003d7a !important;
+        color: #fff !important;
+        border: 1.5px solid #003d7a;
+        font-weight: 700;
+        box-shadow: 0 2px 8px rgba(0,61,122,0.08);
+        opacity: 1 !important;
+    }
+    
+    /* Clean headers */
+    h1, h2, h3 {
+        font-weight: 600 !important;
+        line-height: 1.3 !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    /* Proper column spacing */
+    [data-testid="column"] {
+        padding: 0.5rem;
+    }
+    
+    /* Chat interface improvements */
+    .stChatMessage {
+        padding: 1rem;
+        border-radius: 8px;
         margin-bottom: 1rem;
+    }
+    
+    /* Input fields */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div > select {
+        border-radius: 6px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -123,14 +166,10 @@ def main():
         if days_left <= 7:
             st.warning(f"⚠️ **Demo expires in {days_left} days** - Contact rory@aiarchitectlab.com for full version")
     
-    # Header
-    st.markdown("""
-    <div class="main-header">
-        <h1>CFPB Consumer Complaint Database Analysis</h1>
-        <h3>Consumer Financial Protection Bureau - Complaint Trends and Analysis</h3>
-        <p>Analysis Period: Last 6 Months | Data Source: Official CFPB Database | Focus Areas: AI Bias, Language Access, Digital Fraud</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Header - Simplified and clean
+    st.title("🏛️ CFPB Consumer Complaint Database Analysis")
+    st.markdown("### Consumer Financial Protection Bureau - Complaint Trends and Analysis")
+    st.caption("Analysis Period: Last 6 Months | Data Source: Official CFPB Database | Focus Areas: AI Bias, Language Access, Digital Fraud")
     
     # Initialize session state
     if 'analyzer' not in st.session_state:
@@ -166,7 +205,20 @@ def main():
         
         # Run Analysis Button
         if st.button("Start Analysis", type="primary"):
-            run_analysis(analysis_type, include_ftc, generate_excel)
+            # Only run if analysis hasn't been completed yet or if explicitly requested
+            if not st.session_state.analysis_complete:
+                run_analysis(analysis_type, include_ftc, generate_excel)
+                st.rerun()
+            else:
+                st.info("Analysis already completed! Check the main area for results.")
+        
+        # Reset Analysis Button (for debugging/re-running)
+        if st.session_state.analysis_complete:
+            if st.button("🔄 Reset Analysis", type="secondary"):
+                st.session_state.analysis_complete = False
+                st.session_state.analysis_data = None
+                st.session_state.analyzer = None
+                st.rerun()
         
         # Quick Stats
         if st.session_state.analysis_complete and st.session_state.analysis_data:
@@ -259,86 +311,83 @@ def show_welcome_screen():
         - 🔗 **Clickable links** to verify every complaint
         """)
 
+
+# Cache the loading of the filtered real data for instant Quick Analysis
+@st.cache_data(show_spinner="Loading real CFPB data...")
+def get_filtered_real_data():
+    from analysis.real_data_fetcher import RealDataFetcher
+    fetcher = RealDataFetcher()
+    return fetcher.load_and_filter_data()
+
 def run_analysis(analysis_type, include_ftc, generate_excel):
-    """Run the CFPB analysis with progress tracking"""
-    
+    """Run the CFPB analysis with progress tracking and optimized data loading"""
     progress_container = st.container()
-    
     with progress_container:
         st.markdown("## 🚀 Running Analysis...")
-        
-        # Progress bar
         progress_bar = st.progress(0)
         status_text = st.empty()
-        
         try:
-            # Initialize analyzer
             status_text.text("Initializing CFPB Data Analyzer...")
             progress_bar.progress(10)
-            
             if CFPBRealAnalyzer is None:
                 st.error("Analysis modules not available")
                 return
-            
             analyzer = CFPBRealAnalyzer()
-            
-            # Load data
+            # Data loading logic
             status_text.text("Loading CFPB complaint database...")
             progress_bar.progress(30)
-            
-            success = analyzer.load_real_data()
-            if not success:
-                st.error("Failed to load CFPB data")
-                return
-            
-            if hasattr(analyzer, 'filtered_df') and analyzer.filtered_df is not None:
-                st.success(f"Successfully loaded {len(analyzer.filtered_df):,} complaints for analysis")
-            
+            if analysis_type == "Quick Analysis (Use Existing Data)":
+                # Use cached, pre-filtered real data for speed
+                analyzer.filtered_df = get_filtered_real_data()
+                if analyzer.filtered_df is None:
+                    st.error("Failed to load pre-filtered real CFPB data.")
+                    return
+                st.success(f"Successfully loaded {len(analyzer.filtered_df):,} complaints for analysis (Quick Analysis)")
+            else:
+                # Full Analysis: force reprocess/download and refresh cache
+                success = analyzer.load_real_data(force_download=True)
+                if not success:
+                    st.error("Failed to load CFPB data")
+                    return
+                st.success(f"Successfully loaded {len(analyzer.filtered_df):,} complaints for analysis (Full Analysis)")
+                # Clear Streamlit cache so next Quick Analysis uses new data
+                get_filtered_real_data.clear()
             # Generate analysis
             status_text.text("Processing complaint data and generating analysis...")
             progress_bar.progress(60)
-            
             analysis_results = analyzer.create_detailed_report()
-            
             if not analysis_results:
                 st.error("Failed to generate analysis report")
                 return
-            
             # FTC Triangulation
             if include_ftc:
                 status_text.text("Running FTC cross-validation...")
                 progress_bar.progress(80)
-                
                 if FTCRealTriangulator:
                     ftc_triangulator = FTCRealTriangulator(analyzer)
                     if ftc_triangulator.load_ftc_real_data():
                         triangulation_results = ftc_triangulator.create_triangulation_report()
                         if triangulation_results:
                             st.success("FTC cross-validation complete")
-            
             # Excel export
             if generate_excel:
                 status_text.text("Generating Excel export...")
                 progress_bar.progress(90)
-                
                 analyzer.data_fetcher.export_analysis_data(
                     analyzer.filtered_df,
                     "outputs/cfpb_real_analysis.xlsx"
                 )
                 st.success("Excel export complete")
-            
             # Complete
             progress_bar.progress(100)
             status_text.text("Analysis Complete")
-            
             # Store results
             st.session_state.analyzer = analyzer
             st.session_state.analysis_data = analysis_results
             st.session_state.analysis_complete = True
-            
-            st.success("Analysis completed successfully. View results in the tabs below.")
-            st.rerun()
-            
+            # Clear the progress indicators
+            progress_container.empty()
+            st.success("✅ Analysis completed successfully! View results in the tabs below.")
         except Exception as e:
             st.error(f"Analysis error: {str(e)}")
 
@@ -348,32 +397,26 @@ def show_analysis_dashboard():
     data = st.session_state.analysis_data
     analyzer = st.session_state.analyzer
     
-    # Top metrics row - clean professional style
+    # Top metrics row - Using native Streamlit metrics for consistency
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.markdown(f"""
-        <div class="metric-box">
-            <p class="metric-large">{data['summary']['total_complaints']:,}</p>
-            <p class="metric-label">Total Complaints Analyzed</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.metric(
+            label="Total Complaints Analyzed",
+            value=f"{data['summary']['total_complaints']:,}"
+        )
     
     with col2:
-        st.markdown(f"""
-        <div class="metric-box">
-            <p class="metric-large">{data['summary']['unique_companies']:,}</p>
-            <p class="metric-label">Financial Institutions</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.metric(
+            label="Financial Institutions",
+            value=f"{data['summary']['unique_companies']:,}"
+        )
     
     with col3:
-        st.markdown(f"""
-        <div class="metric-box">
-            <p class="metric-large">{data['summary']['unique_products']:,}</p>
-            <p class="metric-label">Product Categories</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.metric(
+            label="Product Categories",
+            value=f"{data['summary']['unique_products']:,}"
+        )
     
     with col4:
         if 'special_categories' in data:
@@ -383,18 +426,16 @@ def show_analysis_dashboard():
             fraud_count = len(data['special_categories']['fraud_digital_complaints']) if hasattr(data['special_categories']['fraud_digital_complaints'], '__len__') else 0
             
             total_special = ai_count + lep_count + fraud_count
-            st.markdown(f"""
-            <div class="metric-box">
-                <p class="metric-large">{total_special:,}</p>
-                <p class="metric-label">Priority Issue Cases</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.metric(
+                label="Priority Issue Cases",
+                value=f"{total_special:,}"
+            )
     
     # Main charts section
     st.markdown("## Data Visualizations and Analysis")
     
-    # Tab layout for different chart types
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 Professional Dashboard", "📈 Complaint Trends", "🏢 Company Analysis", "🎯 Special Categories", "🔍 Detailed Analysis", "🤖 AI Chat Assistant"])
+    # Tab layout for different chart types - Removed Special Reports tab as requested
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Professional Dashboard", "📈 Complaint Trends", "🏢 Company Analysis", "🤖 AI Chat Assistant"])
     
     with tab1:
         show_professional_dashboard(data, analyzer)
@@ -406,12 +447,6 @@ def show_analysis_dashboard():
         show_companies_charts(data)
     
     with tab4:
-        show_special_categories_charts(data)
-    
-    with tab5:
-        show_deep_dive_analysis(data, analyzer)
-    
-    with tab6:
         show_ai_chat_interface(data, analyzer)
     
     # Excel Export Section
@@ -607,124 +642,6 @@ def show_companies_charts(data):
         details_df = pd.DataFrame(company_details)
         st.dataframe(details_df, use_container_width=True, hide_index=True)
 
-def show_special_categories_charts(data):
-    """Show special categories analysis"""
-    
-    if 'special_categories' not in data:
-        st.warning("No special categories data available")
-        return
-    
-    special = data['special_categories']
-    
-    # Special categories overview
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("### 🎯 Special Category Volumes")
-        
-        # Fix counting for special categories
-        ai_count = len(special['ai_complaints']) if hasattr(special['ai_complaints'], '__len__') else 0
-        lep_count = len(special['lep_complaints']) if hasattr(special['lep_complaints'], '__len__') else 0
-        fraud_count = len(special['fraud_digital_complaints']) if hasattr(special['fraud_digital_complaints'], '__len__') else 0
-        
-        special_data = {
-            "Category": ["AI/Algorithmic Bias", "Limited English Proficiency", "Digital Fraud"],
-            "Count": [ai_count, lep_count, fraud_count]
-        }
-        
-        special_df = pd.DataFrame(special_data)
-        
-        fig = px.bar(
-            special_df,
-            x='Category',
-            y='Count',
-            title="Special Category Complaint Volumes",
-            color='Count',
-            color_continuous_scale='turbo'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        st.markdown("### 📊 Special Categories Distribution")
-        
-        fig = px.pie(
-            special_df,
-            values='Count',
-            names='Category',
-            title="Distribution of Special Categories"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Detailed special category analysis
-    st.markdown("### 🔍 Detailed Special Category Analysis")
-    
-    category_tab1, category_tab2, category_tab3 = st.tabs(["🤖 AI/Algorithmic", "🌐 LEP/Spanish", "🚨 Fraud/Digital"])
-    
-    with category_tab1:
-        show_special_category_details("AI/Algorithmic Bias", special['ai_complaints'])
-    
-    with category_tab2:
-        show_special_category_details("LEP/Spanish Language", special['lep_complaints'])
-    
-    with category_tab3:
-        show_special_category_details("Fraud/Digital Banking", special['fraud_digital_complaints'])
-
-def show_special_category_details(category_name, complaints):
-    """Show details for a specific special category"""
-    
-    if complaints is None or (hasattr(complaints, 'empty') and complaints.empty) or len(complaints) == 0:
-        st.info(f"No {category_name} complaints found in the dataset")
-        return
-    
-    st.markdown(f"### 📋 {category_name} Complaints ({len(complaints)} total)")
-    
-    # Real complaints with clickable links
-    st.markdown("#### Real CFPB Complaints (Links to CFPB Database)")
-    
-    # Handle different data types (DataFrame vs list)
-    if hasattr(complaints, 'iterrows'):  # DataFrame
-        complaint_data = complaints.head(5)
-        for idx, (_, complaint) in enumerate(complaint_data.iterrows()):
-            complaint_id = complaint.get('complaint_id', 'Unknown')
-            company = complaint.get('company', 'Unknown Company')
-            product = complaint.get('product', 'Unknown Product')
-            narrative = complaint.get('consumer_complaint_narrative', 'No narrative available')
-            
-            # Truncate narrative
-            narrative_preview = str(narrative)[:200] + "..." if len(str(narrative)) > 200 else str(narrative)
-            
-            complaint_url = f"https://www.consumerfinance.gov/data-research/consumer-complaints/search/detail/{complaint_id}"
-            
-            st.markdown(f"""
-            **Complaint #{complaint_id}**  
-            **Company:** {company}  
-            **Product:** {product}  
-            **Issue:** {narrative_preview}  
-            [View Full Complaint on CFPB Website]({complaint_url})
-            
-            ---
-            """)
-    else:  # List or other format
-        for i, complaint in enumerate(complaints[:5]):
-            if isinstance(complaint, dict):
-                complaint_id = complaint.get('complaint_id', 'Unknown')
-                company = complaint.get('company', 'Unknown Company')
-                product = complaint.get('product', 'Unknown Product')
-                narrative = complaint.get('consumer_complaint_narrative', 'No narrative available')
-                
-                narrative_preview = str(narrative)[:200] + "..." if len(str(narrative)) > 200 else str(narrative)
-                complaint_url = f"https://www.consumerfinance.gov/data-research/consumer-complaints/search/detail/{complaint_id}"
-                
-                st.markdown(f"""
-                **Complaint #{complaint_id}**  
-                **Company:** {company}  
-                **Product:** {product}  
-                **Issue:** {narrative_preview}  
-                [View Full Complaint on CFPB Website]({complaint_url})
-                
-                ---
-                """)
-
 def show_deep_dive_analysis(data, analyzer):
     """Show deep dive analysis with advanced charts"""
     
@@ -813,21 +730,21 @@ def show_deep_dive_analysis(data, analyzer):
 def show_export_section(analyzer):
     """Show comprehensive data export options with verification"""
     
-    st.markdown("### 📊 Export Real CFPB Data to Excel")
-    st.markdown("Export complete dataset with verification links to double-check every complaint on CFPB.gov")
+    st.markdown("---")
+    st.markdown("## Data Export & Verification")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.markdown("#### 📈 Full Dataset Export")
-        st.markdown("Complete filtered dataset with verification URLs")
+        st.subheader("Full Dataset Export")
+        st.write("Complete filtered dataset with verification URLs")
         
         include_narratives = st.checkbox("Include complaint narratives", value=True, 
                                        help="Include full consumer complaint text")
         
-        if st.button("📊 Export Full Dataset", type="primary"):
+        if st.button("📥 Export Full Dataset", type="primary", key="export_full"):
             if CFPBDataExporter is None:
-                st.error("❌ Data exporter not available. Please check installation.")
+                st.error("Data exporter not available. Please check installation.")
                 return
             try:
                 with st.spinner("Creating comprehensive Excel export with verification links..."):
@@ -835,32 +752,27 @@ def show_export_section(analyzer):
                     filename = exporter.export_full_dataset(include_narratives=include_narratives)
                     
                 if filename:
-                    st.success(f"✅ Export complete!")
-                    st.info(f"📁 File saved: {filename}")
-                    st.markdown("**Features included:**")
-                    st.markdown("- ✅ Real CFPB complaint data only")
-                    st.markdown("- 🔗 Official CFPB verification URLs for each complaint")
-                    st.markdown("- 📋 Complete audit trail and data source documentation")
-                    st.markdown("- 📊 Summary statistics and analysis")
+                    st.success("Export complete!")
+                    st.info(f"File saved: {filename}")
                     
                     # Create download button
                     if os.path.exists(filename):
                         with open(filename, "rb") as file:
-                            btn = st.download_button(
+                            st.download_button(
                                 label="⬇️ Download Excel File",
                                 data=file,
                                 file_name=os.path.basename(filename),
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             )
                 else:
-                    st.error("❌ Export failed. Please try again.")
+                    st.error("Export failed. Please try again.")
                     
             except Exception as e:
-                st.error(f"❌ Export error: {str(e)}")
+                st.error(f"Export error: {str(e)}")
     
     with col2:
-        st.markdown("#### 🎯 Special Categories Export")
-        st.markdown("Focus on AI bias, LEP issues, and digital fraud")
+        st.subheader("Special Categories Export")
+        st.write("Focus on AI bias, LEP issues, and digital fraud")
         
         category_option = st.selectbox("Select category:", [
             "all", "ai_complaints", "lep_complaints", "fraud_digital_complaints"
@@ -871,9 +783,9 @@ def show_export_section(analyzer):
             "fraud_digital_complaints": "Digital Fraud Only"
         }[x])
         
-        if st.button("🎯 Export Category Data"):
+        if st.button("📊 Export Category Data", key="export_category", type="primary"):
             if CFPBDataExporter is None:
-                st.error("❌ Data exporter not available. Please check installation.")
+                st.error("Data exporter not available. Please check installation.")
                 return
             try:
                 with st.spinner(f"Exporting {category_option} data..."):
@@ -881,8 +793,8 @@ def show_export_section(analyzer):
                     filename = exporter.export_category_specific(category_option)
                     
                 if filename:
-                    st.success("✅ Category export complete!")
-                    st.info(f"📁 File: {filename}")
+                    st.success("Category export complete!")
+                    st.info(f"File: {filename}")
                     
                     if os.path.exists(filename):
                         with open(filename, "rb") as file:
@@ -893,24 +805,26 @@ def show_export_section(analyzer):
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             )
                 else:
-                    st.error("❌ Category export failed.")
+                    st.error("Category export failed.")
                     
             except Exception as e:
-                st.error(f"❌ Export error: {str(e)}")
+                st.error(f"Export error: {str(e)}")
     
     with col3:
-        st.markdown("#### 🔍 Verification Report")
-        st.markdown("Data accuracy and source verification")
+        st.subheader("Verification Report")
+        st.write("Data accuracy and source verification")
         
-        st.markdown("**Verification includes:**")
-        st.markdown("- ✅ Data source authentication")
-        st.markdown("- 🔗 Official CFPB database links")
-        st.markdown("- 📋 Filter transparency")
-        st.markdown("- 📊 Quality metrics")
+        st.markdown("""
+        **Verification includes:**
+        - Data source authentication
+        - Official CFPB database links
+        - Filter transparency
+        - Quality metrics
+        """)
         
-        if st.button("🔍 Create Verification Report"):
+        if st.button("✅ Create Verification Report", key="export_verify", type="primary"):
             if CFPBDataExporter is None:
-                st.error("❌ Data exporter not available. Please check installation.")
+                st.error("Data exporter not available. Please check installation.")
                 return
             try:
                 with st.spinner("Generating verification report..."):
@@ -918,8 +832,8 @@ def show_export_section(analyzer):
                     filename = exporter.create_verification_report()
                     
                 if filename:
-                    st.success("✅ Verification report ready!")
-                    st.info(f"📁 Report: {filename}")
+                    st.success("Verification report ready!")
+                    st.info(f"Report: {filename}")
                     
                     if os.path.exists(filename):
                         with open(filename, "rb") as file:
@@ -930,53 +844,40 @@ def show_export_section(analyzer):
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             )
                 else:
-                    st.error("❌ Verification report failed.")
+                    st.error("Verification report failed.")
                     
             except Exception as e:
-                st.error(f"❌ Verification error: {str(e)}")
+                st.error(f"Verification error: {str(e)}")
     
-    # Data verification information
+    # Data verification information - Simplified
     st.markdown("---")
     st.markdown("### 🛡️ Data Verification & Accuracy")
     
-    verification_cols = st.columns(2)
+    col1, col2 = st.columns(2)
     
-    with verification_cols[0]:
-        st.markdown("#### ✅ Data Source Verification")
+    with col1:
         st.markdown("""
-        **Official CFPB Source:** All data comes directly from the Consumer Financial Protection Bureau
-        
-        **Real Data Only:** No simulated, synthetic, or fake data
-        
-        **Verification URLs:** Each complaint includes a direct link to verify on CFPB.gov
-        
-        **Download Source:** https://files.consumerfinance.gov/ccdb/complaints.csv.zip
+        **✅ Data Source Verification**
+        - Official CFPB Source: All data from Consumer Financial Protection Bureau
+        - Real Data Only: No simulated, synthetic, or fake data
+        - Verification URLs: Direct links to verify on CFPB.gov
+        - Download Source: https://files.consumerfinance.gov/ccdb/complaints.csv.zip
         """)
     
-    with verification_cols[1]:
-        st.markdown("#### 📊 Quality Assurance")
+    with col2:
         summary = analyzer.export_summary_stats()
         st.markdown(f"""
-        **Total Verified Complaints:** {summary['total_complaints']:,}
-        
-        **Date Range:** {summary['date_range']}
-        
-        **Data Freshness:** Updated {summary['analysis_date'][:10]}
-        
-        **Coverage:** {summary['unique_states']} states/territories
+        **📊 Quality Assurance**
+        - Total Verified Complaints: {summary['total_complaints']:,}
+        - Date Range: {summary['date_range']}
+        - Data Freshness: Updated {summary['analysis_date'][:10]}
+        - Coverage: {summary['unique_states']} states/territories
         """)
     
-    # Important disclaimers
-    st.markdown("---")
-    st.markdown("### ⚠️ Important Notes")
+    # Important note - Simplified
     st.info("""
-    **Data Accuracy:** This system uses only real CFPB complaint data. Every complaint can be verified on the official CFPB website.
-    
-    **Filtering Applied:** Credit reporting complaints excluded as requested. Only complaints with consumer narratives included.
-    
-    **Verification Required:** Each Excel export includes verification URLs - please use them to double-check any specific complaints.
-    
-    **No Simulated Data:** This analysis contains zero fake, simulated, or generated complaints. All data is from the official CFPB database.
+    **⚠️ Important:** This system uses only real CFPB complaint data. Every complaint can be verified on the official CFPB website. 
+    Credit reporting complaints excluded as requested. Only complaints with consumer narratives included.
     """)
 
 def show_ai_chat_interface(data, analyzer):
@@ -1068,48 +969,73 @@ def show_ai_chat_interface(data, analyzer):
         # Show disabled chat input when no API key
         st.text_input("💬 Enter your OpenAI API key above to start chatting...", disabled=True, placeholder="Chat disabled - API key required")
     
-    # Suggested questions - only work if API key is provided
-    st.markdown("### 💡 Suggested Questions")
+    # Suggested questions - Properly working with AI responses
+    st.markdown("### 💡 Quick Start Questions")
     if not api_key:
-        st.info("👆 **Enter your OpenAI API key above to use these quick questions!**")
+        st.info("💬 Enter your OpenAI API key above to use these quick questions!")
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("📊 What are the top complaint trends?", disabled=not api_key):
-            if api_key:
-                st.session_state.chat_messages.append({"role": "user", "content": "What are the top complaint trends?"})
-                st.rerun()
+        if st.button("📊 Top complaint trends", disabled=not api_key, key="q1", type="secondary"):
+            question = "What are the top complaint trends in the data?"
+            st.session_state.chat_messages.append({"role": "user", "content": question})
+            # Generate AI response immediately
+            data_context = prepare_data_context_for_ai(data, analyzer)
+            response = generate_ai_response(question, data_context, api_key, model_choice)
+            st.session_state.chat_messages.append({"role": "assistant", "content": response})
+            st.rerun()
         
-        if st.button("🏢 Which companies have the most complaints?", disabled=not api_key):
-            if api_key:
-                st.session_state.chat_messages.append({"role": "user", "content": "Which companies have the most complaints?"})
-                st.rerun()
-        
-        if st.button("🎯 Tell me about AI bias complaints", disabled=not api_key):
-            if api_key:
-                st.session_state.chat_messages.append({"role": "user", "content": "Tell me about AI bias complaints"})
-                st.rerun()
-    
-    with col2:
-        if st.button("🚨 What fraud patterns do you see?", disabled=not api_key):
-            if api_key:
-                st.session_state.chat_messages.append({"role": "user", "content": "What fraud patterns do you see?"})
-                st.rerun()
-        
-        if st.button("🌐 Analyze LEP/language access issues", disabled=not api_key):
-            if api_key:
-                st.session_state.chat_messages.append({"role": "user", "content": "Analyze LEP/language access issues"})
-                st.rerun()
-        
-        if st.button("📈 Show me geographic trends"):
-            st.session_state.chat_messages.append({"role": "user", "content": "Show me geographic trends"})
+        if st.button("🤖 AI bias complaints", disabled=not api_key, key="q3", type="secondary"):
+            question = "Tell me about AI bias and algorithm complaints"
+            st.session_state.chat_messages.append({"role": "user", "content": question})
+            data_context = prepare_data_context_for_ai(data, analyzer)
+            response = generate_ai_response(question, data_context, api_key, model_choice)
+            st.session_state.chat_messages.append({"role": "assistant", "content": response})
             st.rerun()
     
+    with col2:
+        if st.button("🏢 Top companies", disabled=not api_key, key="q2", type="secondary"):
+            question = "Which companies have the most complaints?"
+            st.session_state.chat_messages.append({"role": "user", "content": question})
+            data_context = prepare_data_context_for_ai(data, analyzer)
+            response = generate_ai_response(question, data_context, api_key, model_choice)
+            st.session_state.chat_messages.append({"role": "assistant", "content": response})
+            st.rerun()
+        
+        if st.button("🌐 Language access issues", disabled=not api_key, key="q5", type="secondary"):
+            question = "Analyze LEP and language access issues"
+            st.session_state.chat_messages.append({"role": "user", "content": question})
+            data_context = prepare_data_context_for_ai(data, analyzer)
+            response = generate_ai_response(question, data_context, api_key, model_choice)
+            st.session_state.chat_messages.append({"role": "assistant", "content": response})
+            st.rerun()
+    
+    with col3:
+        if st.button("🚨 Fraud patterns", disabled=not api_key, key="q4", type="secondary"):
+            question = "What fraud and digital scam patterns do you see?"
+            st.session_state.chat_messages.append({"role": "user", "content": question})
+            data_context = prepare_data_context_for_ai(data, analyzer)
+            response = generate_ai_response(question, data_context, api_key, model_choice)
+            st.session_state.chat_messages.append({"role": "assistant", "content": response})
+            st.rerun()
+        
+        if st.button("🗺️ Geographic trends", disabled=not api_key, key="q6", type="secondary"):
+            question = "Show me geographic and regional trends"
+            st.session_state.chat_messages.append({"role": "user", "content": question})
+            data_context = prepare_data_context_for_ai(data, analyzer)
+            response = generate_ai_response(question, data_context, api_key, model_choice)
+            st.session_state.chat_messages.append({"role": "assistant", "content": response})
+            st.rerun()
+    
+    st.markdown("---")
+    
     # Clear chat button
-    if st.button("🗑️ Clear Chat History"):
-        st.session_state.chat_messages = []
-        st.rerun()
+    col_clear1, col_clear2, col_clear3 = st.columns([1, 1, 1])
+    with col_clear2:
+        if st.button("🗑️ Clear Chat History", type="secondary"):
+            st.session_state.chat_messages = []
+            st.rerun()
 
 def prepare_data_context_for_ai(data, analyzer):
     """Prepare data context for AI analysis"""
