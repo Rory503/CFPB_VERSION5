@@ -64,6 +64,7 @@ cfpb_version5/
 ├── outputs/                  # Generated reports (.md, .json)
 ├── visualizations/           # Charts and interactive dashboards
 ├── main_analysis.py          # Main execution script
+├── download_data.py          # Script to download latest complaint data
 └── requirements.txt          # Python dependencies
 ```
 
@@ -271,3 +272,18 @@ This tool is designed for legitimate consumer protection, regulatory compliance,
 **Built for:** Financial technology professionals, regulatory experts, and consumer protection advocates working to improve financial services through data-driven insights.
 
 **Version:** 5.0 - Optimized for 2025 regulatory environment and emerging FinTech challenges
+
+# CFPB Dashboard
+
+## How to use
+
+1. Clone the repo.
+2. Download the latest complaint data from the CFPB site:
+   - https://www.consumerfinance.gov/data-research/consumer-complaints/search/
+   - Click "Download all complaint data | CSV"
+3. Place the CSV file in the `data/` folder as `complaints.csv`.
+4. Run the app as usual.
+
+## Optional: Auto-download script
+You can also run `python download_data.py` to fetch the latest data automatically (requires internet access).#   C F P D _ N e w 1  
+ 
