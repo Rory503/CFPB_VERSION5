@@ -12,6 +12,10 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+      - key: LITE_MODE
+        value: "1"
+      - key: MONTHS_WINDOW
+        value: "4"
     healthCheckPath: /
     disk:
       name: data-cache
