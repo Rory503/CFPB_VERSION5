@@ -1,14 +1,18 @@
-# CFPB_VERSION5
+CFPB Consumer Complaint Dashboard
 
-This project analyzes and visualizes CFPB (Consumer Financial Protection Bureau) complaint data to identify trends, patterns, and insights.  
-It includes Python scripts for data cleaning, analysis, and generating reports or dashboards.
+Live app: https://cfpb-consumer-complaints-dashboard.onrender.com
 
-## Features
-- Load and process CFPB complaint CSV data
-- Identify top companies, issues, and complaint trends
-- Visualize key metrics with charts
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Rory503/CFPB_VERSION5/tree/restore-website)
 
-## Setup
-1. Clone this repo  
-   ```bash
-   git clone https://github.com/Rory503/CFPB_VERSION5.git
+Overview
+- Interactive Streamlit dashboard analyzing the official CFPB Consumer Complaint Database.
+- Real data downloaded at runtime; no large CSVs are stored in the repo.
+- Optional AI chat assistant; users can paste their own OpenAI API key in the app.
+
+Local Run
+- pip install -r requirements.txt
+- streamlit run web_dashboard.py
+
+Notes
+- Free hosting may cold‑start; first request can take 30–60 seconds.
+- Exports are written to `outputs/` during a session.
