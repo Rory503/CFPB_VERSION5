@@ -13,4 +13,8 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.9
     healthCheckPath: /
+    disk:
+      name: data-cache
+      mountPath: /opt/render/project/src/data
+      sizeGB: 2
 
