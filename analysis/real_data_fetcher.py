@@ -52,6 +52,7 @@ class CFPBRealDataFetcher:
         print(f"🌐 Source: {self.data_url}")
         
         try:
+            print("Attempting fast API fetch for last 6 months...")
             # Download the ZIP file
             response = requests.get(self.data_url, stream=True)
             response.raise_for_status()
@@ -164,6 +165,7 @@ class CFPBRealDataFetcher:
                 offset += batch
 
             if frames:
+                print(f"API fast-path returned {sum(len(f) for f in frames):,} rows; normalizing...")
                 df_api = pd.concat(frames, ignore_index=True)
                 df_api.rename(columns={
                     "complaint_id": "Complaint ID",
@@ -183,8 +185,8 @@ class CFPBRealDataFetcher:
                 except Exception:
                     pass
                 return df_api
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"API fast-path unavailable, falling back to ZIP: {e}")
 
         # Fallback to original method if fast file doesn't exist
         if csv_path is None:
