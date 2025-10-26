@@ -9,7 +9,12 @@ from datetime import datetime, timedelta
 import re
 import os
 import warnings
-from real_data_fetcher import CFPBRealDataFetcher
+
+# Prefer the lightweight fetcher if available
+try:
+    from analysis.real_data_fetcher_lite import RealDataFetcher as CFPBRealDataFetcher
+except Exception:
+    from real_data_fetcher import CFPBRealDataFetcher
 warnings.filterwarnings('ignore')
 
 class CFPBRealAnalyzer:
