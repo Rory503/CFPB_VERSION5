@@ -60,13 +60,18 @@ Thumbs.db
 temp/
 
 # Large data files (too big for GitHub)
-data/complaints.csv
-data/complaints_filtered.csv
-outputs/*.xlsx
-# large stuff
+# Keep bulky, generated artifacts out of git history.
 /data/
 /outputs/
 /exports/
-*.csv
-*.xlsx
-*.parquet
+!.gitkeep
+!data/README.md
+!outputs/README.md
+!exports/README.md
+
+# If you truly need to commit a tiny example file, whitelist it:
+#!data/sample.csv
+
+# Note: We intentionally do NOT ignore all *.csv/*.xlsx globally so small
+# samples can be versioned. Large real data should remain in /data and be
+# downloaded at runtime.
