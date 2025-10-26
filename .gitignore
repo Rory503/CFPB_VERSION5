@@ -75,3 +75,5 @@ temp/
 # Note: We intentionally do NOT ignore all *.csv/*.xlsx globally so small
 # samples can be versioned. Large real data should remain in /data and be
 # downloaded at runtime.
+
+cfpb_version5/
