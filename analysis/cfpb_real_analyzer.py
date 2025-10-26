@@ -10,9 +10,10 @@ import re
 import os
 import warnings
 
-# Prefer the lightweight fetcher if available
+# Prefer the lightweight fetcher if available. The web app adds the
+# 'analysis' folder to sys.path, so we import modules without the prefix.
 try:
-    from analysis.real_data_fetcher_lite import RealDataFetcher as CFPBRealDataFetcher
+    from real_data_fetcher_lite import RealDataFetcher as CFPBRealDataFetcher
 except Exception:
     from real_data_fetcher import CFPBRealDataFetcher
 warnings.filterwarnings('ignore')

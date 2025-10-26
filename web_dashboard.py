@@ -315,7 +315,10 @@ def show_welcome_screen():
 # Cache the loading of the filtered real data for instant Quick Analysis
 @st.cache_data(show_spinner="Loading real CFPB data...")
 def get_filtered_real_data():
-    from analysis.real_data_fetcher import CFPBRealDataFetcher as RealDataFetcher
+    try:
+        from analysis.real_data_fetcher_lite import RealDataFetcher as RealDataFetcher
+    except Exception:
+        from analysis.real_data_fetcher import CFPBRealDataFetcher as RealDataFetcher
     fetcher = RealDataFetcher()
     return fetcher.load_and_filter_data()
 
