@@ -63,3 +63,10 @@ temp/
 data/complaints.csv
 data/complaints_filtered.csv
 outputs/*.xlsx
+# large stuff
+/data/
+/outputs/
+/exports/
+*.csv
+*.xlsx
+*.parquet
