@@ -4,6 +4,7 @@ Downloads and processes actual CFPB complaint data from the official website
 """
 
 import requests
+import sys
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -15,6 +16,14 @@ import time
 
 class CFPBRealDataFetcher:
     def __init__(self):
+        # Ensure Unicode output works on Windows consoles (prevents 'charmap' codec errors)
+        try:
+            if hasattr(sys.stdout, "reconfigure"):
+                sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            if hasattr(sys.stderr, "reconfigure"):
+                sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
         self.base_url = "https://www.consumerfinance.gov/data-research/consumer-complaints/"
         self.data_url = "https://files.consumerfinance.gov/ccdb/complaints.csv.zip"
         self.data_dir = "data/"
@@ -111,86 +120,12 @@ class CFPBRealDataFetcher:
                 print(f"⚠️  Error loading fast file: {e}")
                 print("📊 Falling back to full dataset...")
         
-        # Try fast path: fetch just the last 6 months via the public API
-        try:
-            endpoint = "https://data.consumerfinance.gov/resource/s6ew-h6mp.csv"
-            where = (
-                f"date_received between '{self.start_date.strftime('%Y-%m-%d')}' and '{self.end_date.strftime('%Y-%m-%d')}'"
-                + " AND consumer_complaint_narrative IS NOT NULL"
-            )
-            if self.credit_exclusions:
-                not_in = ",".join([f"'{c}'" for c in self.credit_exclusions])
-                where += f" AND product NOT IN({not_in})"
+        # Skip Socrata API - use local files only
 
-            select_cols = [
-                "complaint_id",
-                "date_received",
-                "date_sent_to_company",
-                "product",
-                "issue",
-                "company",
-                "state",
-                "consumer_complaint_narrative"
-            ]
-
-            headers = {"Accept": "text/csv"}
-            app_token = os.environ.get("SOCRATA_APP_TOKEN")
-            if app_token:
-                headers["X-App-Token"] = app_token
-
-            batch = 50000
-            offset = 0
-            frames = []
-
-            while True:
-                params = {
-                    "$select": ",".join(select_cols),
-                    "$where": where,
-                    "$order": "date_received DESC",
-                    "$limit": batch,
-                    "$offset": offset,
-                }
-                resp = requests.get(endpoint, params=params, headers=headers, timeout=60)
-                resp.raise_for_status()
-                text = resp.text
-                if not text.strip():
-                    break
-                chunk = pd.read_csv(io.StringIO(text))
-                if chunk.empty:
-                    break
-                frames.append(chunk)
-                if len(chunk) < batch:
-                    break
-                offset += batch
-
-            if frames:
-                df_api = pd.concat(frames, ignore_index=True)
-                df_api.rename(columns={
-                    "complaint_id": "Complaint ID",
-                    "date_received": "Date received",
-                    "date_sent_to_company": "Date sent to company",
-                    "product": "Product",
-                    "issue": "Issue",
-                    "company": "Company",
-                    "state": "State",
-                    "consumer_complaint_narrative": "Consumer complaint narrative",
-                }, inplace=True)
-                df_api['Date received'] = pd.to_datetime(df_api['Date received'])
-                df_api['Date sent to company'] = pd.to_datetime(df_api['Date sent to company'], errors='coerce')
-                # Cache for next time
-                try:
-                    df_api.to_csv(fast_file, index=False)
-                except Exception:
-                    pass
-                return df_api
-        except Exception:
-            pass
-
-        # Fallback to original method if fast file doesn't exist
-        if csv_path is None:
-            csv_path = self.download_latest_data()
+        # Use local data only - no downloads
+        csv_path = os.path.join(self.data_dir, "complaints.csv")
         
-        if csv_path is None or not os.path.exists(csv_path):
+        if not os.path.exists(csv_path):
             print("❌ No data file available. Please download manually.")
             return None
         

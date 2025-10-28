@@ -195,9 +195,105 @@ def main():
         
         analysis_type = st.selectbox(
             "Analysis Type",
-            ["Full Analysis (Download Latest Data)", "Quick Analysis (Use Existing Data)"],
-            help="Full analysis downloads the most recent CFPB complaint data"
+            ["Upload Your Own CSV", "Quick Analysis (Use Existing Data)", "Full Analysis (Download Latest Data)"],
+            help="Upload your own CSV file or use existing data"
         )
+        
+        # File upload section
+        if analysis_type == "Upload Your Own CSV":
+            st.markdown("### 📁 Upload CFPB Data")
+            uploaded_file = st.file_uploader(
+                "Choose a CSV file",
+                type="csv",
+                help="Upload a CFPB complaints CSV file. Should have columns like 'Complaint ID', 'Date received', 'Product', 'Issue', 'Company', 'State', 'Consumer complaint narrative'"
+            )
+            
+            if uploaded_file is not None:
+                try:
+                    # Load the uploaded file
+                    df = pd.read_csv(uploaded_file, low_memory=False)
+                    st.success(f"✅ Loaded {len(df):,} complaints from uploaded file")
+                    
+                    # Show column info
+                    st.info(f"📊 Columns found: {', '.join(df.columns.tolist())}")
+                    
+                    # Store in session state for analysis
+                    st.session_state.uploaded_data = df
+
+                    # Quick Preview option to open dashboard immediately without heavy processing
+                    if st.button("🚀 Open Preview Now", type="primary"):
+                        # Minimal analyzer stub
+                        class _Stub: pass
+                        stub = _Stub()
+                        # Normalize minimal fields for charts that need them
+                        col_map = {c.lower().strip(): c for c in df.columns}
+                        def col(*names):
+                            for n in names:
+                                if n in df.columns:
+                                    return n
+                                ln = n.lower()
+                                if ln in col_map:
+                                    return col_map[ln]
+                            return None
+                        prod = col('Product','product')
+                        issue = col('Issue','issue')
+                        company = col('Company','company')
+                        date_received = col('Date received','date_received')
+                        state = col('State','state')
+                        narr = col('Consumer complaint narrative','consumer_complaint_narrative','narrative')
+                        needed = [x for x in [prod, issue, company, date_received, state, narr] if x]
+                        df_small = df[needed].copy()
+                        if date_received:
+                            import pandas as _pd
+                            df_small[date_received] = _pd.to_datetime(df_small[date_received], errors='coerce')
+                        # Rename to expected names where possible
+                        rename = {}
+                        if prod and prod != 'Product': rename[prod] = 'Product'
+                        if issue and issue != 'Issue': rename[issue] = 'Issue'
+                        if company and company != 'Company': rename[company] = 'Company'
+                        if state and state != 'State': rename[state] = 'State'
+                        if narr and narr != 'Consumer complaint narrative': rename[narr] = 'Consumer complaint narrative'
+                        if date_received and date_received != 'Date received': rename[date_received] = 'Date received'
+                        df_small.rename(columns=rename, inplace=True)
+                        # Minimal session for dashboard
+                        st.session_state.analysis_complete = True
+                        st.session_state.analyzer = _Stub()
+                        st.session_state.analyzer.filtered_df = df_small
+                        # Build lightweight summary/trends directly
+                        import pandas as _pd
+                        summary = {
+                            'total_complaints': len(df_small),
+                            'unique_companies': df_small['Company'].nunique() if 'Company' in df_small.columns else 0,
+                            'unique_products': df_small['Product'].nunique() if 'Product' in df_small.columns else 0,
+                            'unique_states': df_small['State'].nunique() if 'State' in df_small.columns else 0,
+                            'date_range': f"{str(df_small['Date received'].min())[:10]} to {str(df_small['Date received'].max())[:10]}",
+                            'analysis_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        }
+                        trends = {
+                            'top_products': (df_small['Product'].value_counts() if 'Product' in df_small.columns else _pd.Series(dtype=int)),
+                            'top_issues': (df_small['Issue'].value_counts() if 'Issue' in df_small.columns else _pd.Series(dtype=int)),
+                            'sub_trends': {}
+                        }
+                        companies = {}
+                        if 'Company' in df_small.columns:
+                            top_companies = df_small['Company'].value_counts().head(10)
+                            for name in top_companies.index:
+                                subset = df_small[df_small['Company'] == name]
+                                companies[name] = {
+                                    'total_complaints': len(subset),
+                                    'top_issues': (subset['Issue'].value_counts().head(5).to_dict() if 'Issue' in subset.columns else {}),
+                                    'sample_complaints': []
+                                }
+                        st.session_state.analysis_data = {
+                            'summary': summary,
+                            'trends': trends,
+                            'companies': companies,
+                            'special_categories': {'ai_complaints': [], 'lep_complaints': [], 'fraud_digital_complaints': []}
+                        }
+                        st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"❌ Error loading file: {str(e)}")
         
         include_ftc = st.checkbox("Include FTC Cross-Validation", value=True)
         generate_excel = st.checkbox("Generate Excel Export", value=True)
@@ -207,8 +303,12 @@ def main():
         if st.button("Start Analysis", type="primary"):
             # Only run if analysis hasn't been completed yet or if explicitly requested
             if not st.session_state.analysis_complete:
-                run_analysis(analysis_type, include_ftc, generate_excel)
-                st.rerun()
+                success = run_analysis(analysis_type, include_ftc, generate_excel)
+                # Only rerun on success so any error remains visible instead of flashing
+                if success:
+                    st.rerun()
+                else:
+                    st.warning("Analysis failed or was interrupted. See the error above; not auto-retrying.")
             else:
                 st.info("Analysis already completed! Check the main area for results.")
         
@@ -320,7 +420,7 @@ def get_filtered_real_data():
     return fetcher.load_and_filter_data()
 
 def run_analysis(analysis_type, include_ftc, generate_excel):
-    """Run the CFPB analysis with progress tracking and optimized data loading"""
+    """Run the CFPB analysis; returns True on success, False on failure."""
     progress_container = st.container()
     with progress_container:
         st.markdown("## 🚀 Running Analysis...")
@@ -331,24 +431,73 @@ def run_analysis(analysis_type, include_ftc, generate_excel):
             progress_bar.progress(10)
             if CFPBRealAnalyzer is None:
                 st.error("Analysis modules not available")
-                return
+                return False
             analyzer = CFPBRealAnalyzer()
             # Data loading logic
             status_text.text("Loading CFPB complaint database...")
             progress_bar.progress(30)
-            if analysis_type == "Quick Analysis (Use Existing Data)":
+            if analysis_type == "Upload Your Own CSV":
+                # Use uploaded data
+                if 'uploaded_data' not in st.session_state or st.session_state.uploaded_data is None:
+                    st.error("No CSV file uploaded. Please upload a file first.")
+                    return False
+                df = st.session_state.uploaded_data.copy()
+                
+                # Normalize column names to expected format
+                col_map = {c.lower().strip(): c for c in df.columns}
+                def pick(*names):
+                    for n in names:
+                        if n in df.columns:
+                            return n
+                        ln = n.lower()
+                        if ln in col_map:
+                            return col_map[ln]
+                    return None
+                required = {
+                    'Complaint ID': pick('Complaint ID','complaint_id','id'),
+                    'Date received': pick('Date received','date_received'),
+                    'Date sent to company': pick('Date sent to company','date_sent_to_company'),
+                    'Product': pick('Product','product'),
+                    'Issue': pick('Issue','issue'),
+                    'Company': pick('Company','company'),
+                    'State': pick('State','state'),
+                    'Consumer complaint narrative': pick('Consumer complaint narrative','consumer_complaint_narrative','narrative')
+                }
+                missing = [k for k,v in required.items() if v is None]
+                if missing:
+                    st.error(f"Uploaded CSV is missing required columns: {', '.join(missing)}")
+                    return False
+                # Select and rename only needed columns (reduces memory)
+                df_small = df[[required[k] for k in required]].rename(columns={required[k]:k for k in required})
+                
+                # Convert dates
+                try:
+                    df_small['Date received'] = pd.to_datetime(df_small['Date received'])
+                    if 'Date sent to company' in df_small.columns:
+                        df_small['Date sent to company'] = pd.to_datetime(df_small['Date sent to company'], errors='coerce')
+                except Exception:
+                    pass
+                
+                # Limit very large uploads for responsiveness
+                if len(df_small) > 250_000:
+                    df_small = df_small.head(250_000)
+                    st.info("Large file detected – analyzing first 250,000 rows for speed.")
+                
+                analyzer.filtered_df = df_small
+                st.success(f"Successfully loaded {len(analyzer.filtered_df):,} complaints from uploaded file")
+            elif analysis_type == "Quick Analysis (Use Existing Data)":
                 # Use cached, pre-filtered real data for speed
                 analyzer.filtered_df = get_filtered_real_data()
                 if analyzer.filtered_df is None:
                     st.error("Failed to load pre-filtered real CFPB data.")
-                    return
+                    return False
                 st.success(f"Successfully loaded {len(analyzer.filtered_df):,} complaints for analysis (Quick Analysis)")
             else:
                 # Full Analysis: force reprocess/download and refresh cache
                 success = analyzer.load_real_data(force_download=True)
                 if not success:
                     st.error("Failed to load CFPB data")
-                    return
+                    return False
                 st.success(f"Successfully loaded {len(analyzer.filtered_df):,} complaints for analysis (Full Analysis)")
                 # Clear Streamlit cache so next Quick Analysis uses new data
                 get_filtered_real_data.clear()
@@ -358,7 +507,7 @@ def run_analysis(analysis_type, include_ftc, generate_excel):
             analysis_results = analyzer.create_detailed_report()
             if not analysis_results:
                 st.error("Failed to generate analysis report")
-                return
+                return False
             # FTC Triangulation
             if include_ftc:
                 status_text.text("Running FTC cross-validation...")
@@ -388,8 +537,10 @@ def run_analysis(analysis_type, include_ftc, generate_excel):
             # Clear the progress indicators
             progress_container.empty()
             st.success("✅ Analysis completed successfully! View results in the tabs below.")
+            return True
         except Exception as e:
             st.error(f"Analysis error: {str(e)}")
+            return False
 
 def show_analysis_dashboard():
     """Show the main analysis dashboard with charts"""
@@ -865,7 +1016,11 @@ def show_export_section(analyzer):
         """)
     
     with col2:
-        summary = analyzer.export_summary_stats()
+        # Use analyzer summary if available; otherwise use the preview summary from session state
+        if hasattr(analyzer, 'export_summary_stats') and callable(getattr(analyzer, 'export_summary_stats')):
+            summary = analyzer.export_summary_stats()
+        else:
+            summary = st.session_state.get('analysis_data', {}).get('summary', {})
         st.markdown(f"""
         **📊 Quality Assurance**
         - Total Verified Complaints: {summary['total_complaints']:,}

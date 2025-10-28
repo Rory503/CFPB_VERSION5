@@ -4,6 +4,7 @@ Processes real CFPB complaint data with no simulated data
 """
 
 import pandas as pd
+import sys
 import numpy as np
 from datetime import datetime, timedelta
 import re
@@ -14,6 +15,14 @@ warnings.filterwarnings('ignore')
 
 class CFPBRealAnalyzer:
     def __init__(self):
+        # Ensure Unicode output works on Windows consoles to avoid 'charmap' codec errors
+        try:
+            if hasattr(sys.stdout, "reconfigure"):
+                sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            if hasattr(sys.stderr, "reconfigure"):
+                sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
         self.data_dir = "data/"
         self.output_dir = "outputs/"
         self.viz_dir = "visualizations/"
