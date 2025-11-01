@@ -568,8 +568,8 @@ def show_analysis_dashboard():
     # Main charts section
     st.markdown("## Data Visualizations and Analysis")
     
-    # Tab layout for different chart types - Removed Special Reports tab as requested
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Professional Dashboard", "📈 Complaint Trends", "🏢 Company Analysis", "🤖 AI Chat Assistant"])
+    # Tab layout for different chart types - Added Consumer Complaints tab
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Professional Dashboard", "📈 Complaint Trends", "🏢 Company Analysis", "📋 Consumer Complaints", "🤖 AI Chat Assistant"])
     
     with tab1:
         show_professional_dashboard(data, analyzer)
@@ -581,6 +581,9 @@ def show_analysis_dashboard():
         show_companies_charts(data)
     
     with tab4:
+        show_consumer_complaints(data, analyzer)
+    
+    with tab5:
         show_ai_chat_interface(data, analyzer)
     
     # Excel Export Section
@@ -775,6 +778,115 @@ def show_companies_charts(data):
         
         details_df = pd.DataFrame(company_details)
         st.dataframe(details_df, use_container_width=True, hide_index=True)
+
+def show_consumer_complaints(data, analyzer):
+    """Show individual consumer complaints with all details"""
+    
+    st.markdown("### 📋 Individual Consumer Complaints")
+    st.markdown("View detailed information for each complaint in the database")
+    
+    if not analyzer or not hasattr(analyzer, 'filtered_df') or analyzer.filtered_df is None:
+        st.warning("No complaint data available. Please run the analysis first.")
+        return
+    
+    df = analyzer.filtered_df
+    
+    # Check if we have the necessary columns - handle both capitalized and lowercase
+    col_map = {c.lower().strip(): c for c in df.columns}
+    
+    # Map column names
+    complaint_id_col = col_map.get('complaint id', 'Complaint ID')
+    company_col = col_map.get('company', 'Company')
+    company_response_col = col_map.get('company response to consumer', 'Company response to consumer')
+    timely_col = col_map.get('timely response?', 'Timely response?')
+    date_received_col = col_map.get('date received', 'Date received')
+    state_col = col_map.get('state', 'State')
+    product_col = col_map.get('product', 'Product')
+    subproduct_col = col_map.get('sub-product', 'Sub-product')
+    issue_col = col_map.get('issue', 'Issue')
+    subissue_col = col_map.get('sub-issue', 'Sub-issue')
+    narrative_col = col_map.get('consumer complaint narrative', 'Consumer complaint narrative')
+    
+    # Create filters
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # Company filter
+        if company_col in df.columns:
+            companies = sorted(df[company_col].dropna().unique())
+            selected_company = st.selectbox("Filter by Company:", ["All"] + companies[:50])
+        else:
+            selected_company = "All"
+    
+    with col2:
+        # Product filter
+        if product_col in df.columns:
+            products = sorted(df[product_col].dropna().unique())
+            selected_product = st.selectbox("Filter by Product:", ["All"] + products)
+        else:
+            selected_product = "All"
+    
+    with col3:
+        # Number of complaints to show
+        num_complaints = st.selectbox("Number of complaints to show:", [10, 25, 50, 100, 200], index=2)
+    
+    # Apply filters
+    filtered_df = df.copy()
+    
+    if selected_company != "All" and company_col in df.columns:
+        filtered_df = filtered_df[filtered_df[company_col] == selected_company]
+    
+    if selected_product != "All" and product_col in df.columns:
+        filtered_df = filtered_df[filtered_df[product_col] == selected_product]
+    
+    # Limit number of complaints
+    display_df = filtered_df.head(num_complaints)
+    
+    # Display summary
+    st.info(f"Showing {len(display_df):,} out of {len(filtered_df):,} total complaints matching your filters")
+    
+    # Display each complaint
+    for idx, row in display_df.iterrows():
+        # Create container for each complaint
+        with st.expander(f"Complaint #{row.get(complaint_id_col, idx)} - {row.get(company_col, 'Unknown Company')}", expanded=False):
+            
+            # Create two columns for layout
+            left_col, right_col = st.columns([1, 1])
+            
+            with left_col:
+                st.markdown(f"**Complaint ID:** `{row.get(complaint_id_col, 'N/A')}`")
+                st.markdown(f"**Company Name:** {row.get(company_col, 'N/A')}")
+                st.markdown(f"**Company Response:** {row.get(company_response_col, 'N/A')}")
+                st.markdown(f"**Timely Response:** {row.get(timely_col, 'N/A')}")
+                st.markdown(f"**Date Received:** {row.get(date_received_col, 'N/A')}")
+                st.markdown(f"**Consumer's State:** {row.get(state_col, 'N/A')}")
+            
+            with right_col:
+                st.markdown(f"**Product:** {row.get(product_col, 'N/A')}")
+                if subproduct_col in df.columns and pd.notna(row.get(subproduct_col)):
+                    st.markdown(f"**Sub-product:** {row.get(subproduct_col, 'N/A')}")
+                st.markdown(f"**Issue:** {row.get(issue_col, 'N/A')}")
+                if subissue_col in df.columns and pd.notna(row.get(subissue_col)):
+                    st.markdown(f"**Sub-issue:** {row.get(subissue_col, 'N/A')}")
+            
+            # Consumer Complaint Narrative (full width)
+            if narrative_col in df.columns and pd.notna(row.get(narrative_col)):
+                st.markdown("**Consumer Complaint Narrative:**")
+                st.text_area(
+                    "",
+                    value=str(row.get(narrative_col, '')),
+                    height=150,
+                    disabled=True,
+                    label_visibility="collapsed"
+                )
+            
+            # Add link to CFPB website
+            if complaint_id_col in df.columns and pd.notna(row.get(complaint_id_col)):
+                complaint_id = str(row.get(complaint_id_col))
+                cfpb_link = f"https://www.consumerfinance.gov/data-research/consumer-complaints/search/detail/{complaint_id}"
+                st.markdown(f"[🔗 View this complaint on CFPB.gov]({cfpb_link})")
+        
+        st.markdown("---")
 
 def show_deep_dive_analysis(data, analyzer):
     """Show deep dive analysis with advanced charts"""
