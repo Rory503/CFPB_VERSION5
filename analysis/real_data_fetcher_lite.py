@@ -125,14 +125,21 @@ class RealDataFetcher:
         print(
             f"Loading CFPB data (lite={self.lite_mode}) for window: {self.start_date:%Y-%m-%d} to {self.end_date:%Y-%m-%d}"
         )
-        # Try cached filtered file first
+        # Try cached filtered file first - but only if it's recent (not from old hardcoded dates)
         cache = os.path.join(self.data_dir, "complaints_filtered.csv")
         if os.path.exists(cache):
             try:
-                df = pd.read_csv(cache, low_memory=False)
-                df["Date received"] = pd.to_datetime(df["Date received"]) 
-                df["Date sent to company"] = pd.to_datetime(df["Date sent to company"], errors="coerce") 
-                return df
+                # Check cache age - ignore if older than 1 day to avoid stale data
+                cache_age = datetime.now() - datetime.fromtimestamp(os.path.getmtime(cache))
+                if cache_age.days < 1:
+                    df = pd.read_csv(cache, low_memory=False)
+                    df["Date received"] = pd.to_datetime(df["Date received"]) 
+                    df["Date sent to company"] = pd.to_datetime(df["Date sent to company"], errors="coerce") 
+                    # Also check if data is in current date range
+                    if len(df) > 0:
+                        max_date = df["Date received"].max()
+                        if max_date.date() >= self.start_date.date():
+                            return df
             except Exception:
                 pass
 

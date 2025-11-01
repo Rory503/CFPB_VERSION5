@@ -115,14 +115,25 @@ class CFPBRealDataFetcher:
         if os.path.exists(fast_file):
             print("📊 Loading pre-filtered CFPB data (REAL data, optimized for speed)...")
             try:
-                df = pd.read_csv(fast_file, low_memory=False)
-                print(f"✅ Loaded {len(df):,} real CFPB complaints (pre-filtered)")
-                
-                # Convert date columns
-                df['Date received'] = pd.to_datetime(df['Date received'])
-                df['Date sent to company'] = pd.to_datetime(df['Date sent to company'], errors='coerce')
-                
-                return df
+                # Check cache age - ignore if older than 1 day to avoid stale data
+                cache_age = datetime.now() - datetime.fromtimestamp(os.path.getmtime(fast_file))
+                if cache_age.days < 1:
+                    df = pd.read_csv(fast_file, low_memory=False)
+                    print(f"✅ Loaded {len(df):,} real CFPB complaints (pre-filtered)")
+                    
+                    # Convert date columns
+                    df['Date received'] = pd.to_datetime(df['Date received'])
+                    df['Date sent to company'] = pd.to_datetime(df['Date sent to company'], errors='coerce')
+                    
+                    # Check if data is in current date range
+                    if len(df) > 0:
+                        max_date = df['Date received'].max()
+                        if max_date.date() >= self.start_date.date():
+                            return df
+                        else:
+                            print("⚠️  Cached data is outside current date range, refreshing...")
+                else:
+                    print(f"⚠️  Cache is {cache_age.days} days old, refreshing...")
             except Exception as e:
                 print(f"⚠️  Error loading fast file: {e}")
                 print("📊 Falling back to full dataset...")
