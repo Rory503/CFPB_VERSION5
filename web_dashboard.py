@@ -37,12 +37,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'analysis'))
 
 try:
     from analysis.cfpb_real_analyzer import CFPBRealAnalyzer
-    from analysis.ftc_real_triangulator import FTCRealTriangulator
     from analysis.data_exporter import CFPBDataExporter
 except ImportError as e:
     print(f"Import error: {e}")
     CFPBRealAnalyzer = None
-    FTCRealTriangulator = None
     CFPBDataExporter = None
 
 # Clean, professional styling - No overlapping text
@@ -283,7 +281,6 @@ def main():
                 except Exception as e:
                     st.error(f"❌ Error loading file: {str(e)}")
         
-        include_ftc = st.checkbox("Include FTC Cross-Validation", value=True)
         generate_excel = st.checkbox("Generate Excel Export", value=True)
         auto_refresh = st.checkbox("Auto-refresh Visualizations", value=True)
         
@@ -291,7 +288,7 @@ def main():
         if st.button("Start Analysis", type="primary"):
             # Only run if analysis hasn't been completed yet or if explicitly requested
             if not st.session_state.analysis_complete:
-                success = run_analysis(analysis_type, include_ftc, generate_excel, months_to_load)
+                success = run_analysis(analysis_type, generate_excel, months_to_load)
                 # Only rerun on success so any error remains visible instead of flashing
                 if success:
                     st.rerun()
@@ -416,7 +413,7 @@ def get_filtered_real_data(months_window=None):
     fetcher = RealDataFetcher()
     return fetcher.load_and_filter_data()
 
-def run_analysis(analysis_type, include_ftc, generate_excel, months_to_load=6):
+def run_analysis(analysis_type, generate_excel, months_to_load=6):
     """Run the CFPB analysis; returns True on success, False on failure."""
     progress_container = st.container()
     with progress_container:
@@ -493,8 +490,12 @@ def run_analysis(analysis_type, include_ftc, generate_excel, months_to_load=6):
                 except Exception:
                     from analysis.real_data_fetcher import CFPBRealDataFetcher as RealDataFetcher
                 
-                fetcher = RealDataFetcher()
-                analyzer.filtered_df = fetcher.load_and_filter_data()
+                try:
+                    fetcher = RealDataFetcher()
+                    analyzer.filtered_df = fetcher.load_and_filter_data()
+                except Exception as e:
+                    st.error(f"Error loading data: {str(e)}")
+                    return False
                 
                 if analyzer.filtered_df is None:
                     st.error("Failed to load pre-filtered real CFPB data.")
@@ -516,16 +517,6 @@ def run_analysis(analysis_type, include_ftc, generate_excel, months_to_load=6):
             if not analysis_results:
                 st.error("Failed to generate analysis report")
                 return False
-            # FTC Triangulation
-            if include_ftc:
-                status_text.text("Running FTC cross-validation...")
-                progress_bar.progress(80)
-                if FTCRealTriangulator:
-                    ftc_triangulator = FTCRealTriangulator(analyzer)
-                    if ftc_triangulator.load_ftc_real_data():
-                        triangulation_results = ftc_triangulator.create_triangulation_report()
-                        if triangulation_results:
-                            st.success("FTC cross-validation complete")
             # Excel export
             if generate_excel:
                 status_text.text("Generating Excel export...")
