@@ -6,6 +6,16 @@ Creates a smaller file with ONLY the data we need for faster loading
 import pandas as pd
 from datetime import datetime, timedelta
 import os
+import sys
+
+# Fix Windows encoding issues
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
 def create_fast_dataset():
     """Create pre-filtered dataset with real CFPB data matching your requirements"""
