@@ -794,18 +794,34 @@ def show_consumer_complaints(data, analyzer):
     # Check if we have the necessary columns - handle both capitalized and lowercase
     col_map = {c.lower().strip(): c for c in df.columns}
     
-    # Map column names
-    complaint_id_col = col_map.get('complaint id', 'Complaint ID')
-    company_col = col_map.get('company', 'Company')
-    company_response_col = col_map.get('company response to consumer', 'Company response to consumer')
-    timely_col = col_map.get('timely response?', 'Timely response?')
-    date_received_col = col_map.get('date received', 'Date received')
-    state_col = col_map.get('state', 'State')
-    product_col = col_map.get('product', 'Product')
-    subproduct_col = col_map.get('sub-product', 'Sub-product')
-    issue_col = col_map.get('issue', 'Issue')
-    subissue_col = col_map.get('sub-issue', 'Sub-issue')
-    narrative_col = col_map.get('consumer complaint narrative', 'Consumer complaint narrative')
+    # Map column names - try multiple variations for robustness
+    complaint_id_col = col_map.get('complaint id') or 'Complaint ID'
+    company_col = col_map.get('company') or 'Company'
+    company_response_col = col_map.get('company response to consumer') or 'Company response to consumer'
+    timely_col = col_map.get('timely response?') or 'Timely response?'
+    date_received_col = col_map.get('date received') or 'Date received'
+    state_col = col_map.get('state') or 'State'
+    product_col = col_map.get('product') or 'Product'
+    subproduct_col = col_map.get('sub-product') or 'Sub-product'
+    issue_col = col_map.get('issue') or 'Issue'
+    subissue_col = col_map.get('sub-issue') or 'Sub-issue'
+    
+    # Try multiple variations for narrative column
+    narrative_col = None
+    for possible_name in ['consumer complaint narrative', 'Consumer complaint narrative', 'consumer_complaint_narrative', 'narrative']:
+        if possible_name in df.columns:
+            narrative_col = possible_name
+            break
+        if possible_name.lower() in col_map:
+            narrative_col = col_map[possible_name.lower()]
+            break
+    
+    if narrative_col is None:
+        # Last resort: search for any column containing 'narrative' or 'complaint'
+        for col in df.columns:
+            if 'narrative' in str(col).lower() or 'complaint' in str(col).lower():
+                narrative_col = col
+                break
     
     # Create filters
     col1, col2, col3 = st.columns(3)
@@ -827,8 +843,8 @@ def show_consumer_complaints(data, analyzer):
             selected_product = "All"
     
     with col3:
-        # Number of complaints to show
-        num_complaints = st.selectbox("Number of complaints to show:", [10, 25, 50, 100, 200], index=2)
+        # Number of complaints to show - add "All" option
+        num_complaints = st.selectbox("Number of complaints to show:", [10, 25, 50, 100, 200, 500, 1000, "All"], index=2)
     
     # Apply filters
     filtered_df = df.copy()
@@ -840,7 +856,10 @@ def show_consumer_complaints(data, analyzer):
         filtered_df = filtered_df[filtered_df[product_col] == selected_product]
     
     # Limit number of complaints
-    display_df = filtered_df.head(num_complaints)
+    if num_complaints == "All":
+        display_df = filtered_df.copy()
+    else:
+        display_df = filtered_df.head(num_complaints)
     
     # Display summary
     st.info(f"Showing {len(display_df):,} out of {len(filtered_df):,} total complaints matching your filters")
@@ -870,15 +889,18 @@ def show_consumer_complaints(data, analyzer):
                     st.markdown(f"**Sub-issue:** {row.get(subissue_col, 'N/A')}")
             
             # Consumer Complaint Narrative (full width)
-            if narrative_col in df.columns and pd.notna(row.get(narrative_col)):
+            narrative_value = row.get(narrative_col, None)
+            if narrative_col in df.columns and pd.notna(narrative_value) and str(narrative_value).strip() != '':
                 st.markdown("**Consumer Complaint Narrative:**")
                 st.text_area(
                     "",
-                    value=str(row.get(narrative_col, '')),
-                    height=150,
+                    value=str(narrative_value),
+                    height=200,
                     disabled=True,
                     label_visibility="collapsed"
                 )
+            else:
+                st.markdown("*Consumer Complaint Narrative: No narrative provided*")
             
             # Add link to CFPB website
             if complaint_id_col in df.columns and pd.notna(row.get(complaint_id_col)):
