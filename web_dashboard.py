@@ -1,6 +1,7 @@
 """
 CFPB Analysis - Modern Web Dashboard
 Beautiful, interactive dashboard with real-time charts and data visualization
+Updated: Demo expiration removed - Full version active
 """
 
 import streamlit as st
