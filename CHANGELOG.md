@@ -21,12 +21,15 @@
 - **Month Selector** - Choose how many months of data to load (1-6 months) in the analysis options
 
 ### Fixed
+- **CRITICAL:** Fixed hardcoded future dates (April-October 2025) that prevented all data loading
 - **Consumer complaint narratives now display properly** with improved column detection
 - **Can now view all complaints** without the 200 complaint limit
 - **Fixed "Failed to load pre-filtered real CFPB data" error** in Quick Analysis
+- **Date range now uses relative dates** (today minus N months) instead of fixed future dates
 - Enhanced narrative column detection with multiple fallback strategies
 - Better handling of missing narrative data with clear indicators
 - Added `__init__.py` to analysis package for proper imports
+- MONTHS_WINDOW environment variable now properly passed to all data fetchers
 
 ### Technical Improvements
 - Added new `show_consumer_complaints()` function to web_dashboard.py
