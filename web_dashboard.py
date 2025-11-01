@@ -424,6 +424,10 @@ def run_analysis(analysis_type, include_ftc, generate_excel, months_to_load=6):
         progress_bar = st.progress(0)
         status_text = st.empty()
         try:
+            # Set MONTHS_WINDOW environment variable BEFORE creating analyzers
+            import os
+            os.environ['MONTHS_WINDOW'] = str(months_to_load)
+            
             status_text.text("Initializing CFPB Data Analyzer...")
             progress_bar.progress(10)
             if CFPBRealAnalyzer is None:
@@ -483,15 +487,11 @@ def run_analysis(analysis_type, include_ftc, generate_excel, months_to_load=6):
                 analyzer.filtered_df = df_small
                 st.success(f"Successfully loaded {len(analyzer.filtered_df):,} complaints from uploaded file")
             elif analysis_type == "Quick Analysis (Use Existing Data)":
-                # Use data with specified month window - need to bypass cache for custom months
+                # Use data with specified month window - MONTHS_WINDOW already set above
                 try:
                     from analysis.real_data_fetcher_lite import RealDataFetcher as RealDataFetcher
                 except Exception:
                     from analysis.real_data_fetcher import CFPBRealDataFetcher as RealDataFetcher
-                
-                # Set environment variable for month window
-                import os
-                os.environ['MONTHS_WINDOW'] = str(months_to_load)
                 
                 fetcher = RealDataFetcher()
                 analyzer.filtered_df = fetcher.load_and_filter_data()

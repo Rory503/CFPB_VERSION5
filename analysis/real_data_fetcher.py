@@ -31,9 +31,16 @@ class CFPBRealDataFetcher:
         # Ensure data directory exists
         os.makedirs(self.data_dir, exist_ok=True)
         
-        # Date range for analysis (last 6 months)
-        self.end_date = datetime(2025, 10, 19)
-        self.start_date = datetime(2025, 4, 19)
+        # Date range for analysis (last 6 months) - use relative dates
+        # Try to get MONTHS_WINDOW from environment, default to 6 months
+        try:
+            months = int(os.environ.get("MONTHS_WINDOW", "6"))
+        except ValueError:
+            months = 6
+        months = max(1, min(months, 12))
+        
+        self.end_date = datetime.now()
+        self.start_date = self.end_date - timedelta(days=30 * months)
         
         # Credit reporting categories to exclude (both checkboxes)
         self.credit_exclusions = [
