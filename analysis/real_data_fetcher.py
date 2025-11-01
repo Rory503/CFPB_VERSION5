@@ -167,12 +167,16 @@ class CFPBRealDataFetcher:
             
             print("🔍 Applying filters...")
             
-            # 1. Date range filter (last 6 months: April 19 - October 19, 2025)
+            # Debug: Print date range being used
+            print(f"📅 Looking for complaints between: {self.start_date.strftime('%Y-%m-%d')} and {self.end_date.strftime('%Y-%m-%d')}")
+            print(f"📅 Data has complaints from: {df['Date received'].min()} to {df['Date received'].max()}")
+            
+            # 1. Date range filter (last 6 months)
             date_mask = (
                 (df['Date received'] >= self.start_date) & 
                 (df['Date received'] <= self.end_date)
             )
-            print(f"📅 Date range filter: {date_mask.sum():,} complaints in last 6 months")
+            print(f"📅 Date range filter: {date_mask.sum():,} complaints match date range")
             
             # 2. Has narrative filter (must have consumer complaint narrative)
             narrative_mask = (

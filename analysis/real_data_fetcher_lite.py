@@ -145,21 +145,35 @@ class RealDataFetcher:
 
         # API fast path
         try:
+            print("Attempting API fetch...")
             df = self._fetch_api()
             if df is not None:
+                print(f"API fetch successful: {len(df)} records")
                 return df
+            else:
+                print("API returned None")
         except Exception as e:
-            print(f"API path failed: {e}")
+            print(f"API path failed: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
 
         # Fallback: let the legacy fetcher handle ZIP if really needed
         # Import lazily to avoid pulling heavy deps here
         try:
+            print("Attempting legacy ZIP fallback...")
             from .real_data_fetcher import CFPBRealDataFetcher as Legacy
 
             legacy = Legacy()
-            return legacy.load_and_filter_data()
+            result = legacy.load_and_filter_data()
+            if result is not None:
+                print(f"Legacy ZIP fallback successful: {len(result)} records")
+            else:
+                print("Legacy ZIP fallback returned None")
+            return result
         except Exception as e:
-            print(f"Legacy ZIP path failed: {e}")
+            print(f"Legacy ZIP path failed: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     # The following helpers mirror the original fetcher API

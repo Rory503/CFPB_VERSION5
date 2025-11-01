@@ -492,13 +492,19 @@ def run_analysis(analysis_type, generate_excel, months_to_load=6):
                 
                 try:
                     fetcher = RealDataFetcher()
+                    status_text.text(f"Fetching data for past {months_to_load} months...")
                     analyzer.filtered_df = fetcher.load_and_filter_data()
                 except Exception as e:
                     st.error(f"Error loading data: {str(e)}")
+                    import traceback
+                    st.exception(e)
                     return False
                 
                 if analyzer.filtered_df is None:
-                    st.error("Failed to load pre-filtered real CFPB data.")
+                    st.error("Failed to load pre-filtered real CFPB data. Try 'Full Analysis' to download fresh data.")
+                    return False
+                if len(analyzer.filtered_df) == 0:
+                    st.error(f"No complaints found for the past {months_to_load} months. Try selecting more months or use 'Full Analysis'.")
                     return False
                 st.success(f"Successfully loaded {len(analyzer.filtered_df):,} complaints for analysis (Quick Analysis - {months_to_load} months)")
             else:
