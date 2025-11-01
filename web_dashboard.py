@@ -173,6 +173,14 @@ def main():
         # Analysis Controls
         st.markdown("### Analysis Options")
         
+        # Month selection for data loading
+        months_to_load = st.selectbox(
+            "Load data for past:",
+            [1, 2, 3, 4, 5, 6],
+            index=3,
+            help="Select how many months of complaint data to load (1-6 months)"
+        )
+        
         analysis_type = st.selectbox(
             "Analysis Type",
             ["Upload Your Own CSV", "Quick Analysis (Use Existing Data)", "Full Analysis (Download Latest Data)"],
@@ -283,7 +291,7 @@ def main():
         if st.button("Start Analysis", type="primary"):
             # Only run if analysis hasn't been completed yet or if explicitly requested
             if not st.session_state.analysis_complete:
-                success = run_analysis(analysis_type, include_ftc, generate_excel)
+                success = run_analysis(analysis_type, include_ftc, generate_excel, months_to_load)
                 # Only rerun on success so any error remains visible instead of flashing
                 if success:
                     st.rerun()
@@ -394,15 +402,21 @@ def show_welcome_screen():
 
 # Cache the loading of the filtered real data for instant Quick Analysis
 @st.cache_data(show_spinner="Loading real CFPB data...")
-def get_filtered_real_data():
+def get_filtered_real_data(months_window=None):
     try:
         from analysis.real_data_fetcher_lite import RealDataFetcher as RealDataFetcher
     except Exception:
         from analysis.real_data_fetcher import CFPBRealDataFetcher as RealDataFetcher
+    
+    # Set environment variable for month window if provided
+    if months_window is not None:
+        import os
+        os.environ['MONTHS_WINDOW'] = str(months_window)
+    
     fetcher = RealDataFetcher()
     return fetcher.load_and_filter_data()
 
-def run_analysis(analysis_type, include_ftc, generate_excel):
+def run_analysis(analysis_type, include_ftc, generate_excel, months_to_load=6):
     """Run the CFPB analysis; returns True on success, False on failure."""
     progress_container = st.container()
     with progress_container:
@@ -469,12 +483,23 @@ def run_analysis(analysis_type, include_ftc, generate_excel):
                 analyzer.filtered_df = df_small
                 st.success(f"Successfully loaded {len(analyzer.filtered_df):,} complaints from uploaded file")
             elif analysis_type == "Quick Analysis (Use Existing Data)":
-                # Use cached, pre-filtered real data for speed
-                analyzer.filtered_df = get_filtered_real_data()
+                # Use data with specified month window - need to bypass cache for custom months
+                try:
+                    from analysis.real_data_fetcher_lite import RealDataFetcher as RealDataFetcher
+                except Exception:
+                    from analysis.real_data_fetcher import CFPBRealDataFetcher as RealDataFetcher
+                
+                # Set environment variable for month window
+                import os
+                os.environ['MONTHS_WINDOW'] = str(months_to_load)
+                
+                fetcher = RealDataFetcher()
+                analyzer.filtered_df = fetcher.load_and_filter_data()
+                
                 if analyzer.filtered_df is None:
                     st.error("Failed to load pre-filtered real CFPB data.")
                     return False
-                st.success(f"Successfully loaded {len(analyzer.filtered_df):,} complaints for analysis (Quick Analysis)")
+                st.success(f"Successfully loaded {len(analyzer.filtered_df):,} complaints for analysis (Quick Analysis - {months_to_load} months)")
             else:
                 # Full Analysis: force reprocess/download and refresh cache
                 success = analyzer.load_real_data(force_download=True)
