@@ -22,6 +22,7 @@
 
 ### Fixed
 - **CRITICAL:** Fixed hardcoded future dates (April-October 2025) that prevented all data loading
+- **Added cache validation** to prevent loading stale cached data from old hardcoded dates
 - **Consumer complaint narratives now display properly** with improved column detection
 - **Can now view all complaints** without the 200 complaint limit
 - **Fixed "Failed to load pre-filtered real CFPB data" error** in Quick Analysis
@@ -30,6 +31,10 @@
 - Better handling of missing narrative data with clear indicators
 - Added `__init__.py` to analysis package for proper imports
 - MONTHS_WINDOW environment variable now properly passed to all data fetchers
+- Improved error handling to show exact error messages when data loading fails
+
+### Removed
+- **FTC Cross-Validation** feature removed from the interface
 
 ### Technical Improvements
 - Added new `show_consumer_complaints()` function to web_dashboard.py
