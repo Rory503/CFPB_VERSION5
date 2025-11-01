@@ -16,15 +16,22 @@
 - Interactive filtering system:
   - Filter by company (top 50 companies available)
   - Filter by product category
-  - Adjustable number of complaints to display (10, 25, 50, 100, 200)
-- Expandable card layout for easy viewing
-- Direct links to verify each complaint on CFPB.gov
+  - Adjustable number of complaints to display (10, 25, 50, 100, 200, 500, 1000, All)
+  - **NEW:** "All" option to view all complaints in the system (e.g., all 51,466+ complaints)
+
+### Fixed
+- **Consumer complaint narratives now display properly** with improved column detection
+- **Can now view all complaints** without the 200 complaint limit
+- Enhanced narrative column detection with multiple fallback strategies
+- Better handling of missing narrative data with clear indicators
 
 ### Technical Improvements
 - Added new `show_consumer_complaints()` function to web_dashboard.py
 - Robust column name mapping to handle different case conventions
+- Multiple narrative column name variations supported
 - Smart handling of missing or empty fields
 - Efficient display with pandas data handling
+- Improved narrative detection with fallback logic
 
 ### Deployment
 - Changes pushed to both `restore-website` and `main` branches
