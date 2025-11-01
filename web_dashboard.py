@@ -145,27 +145,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def main():
-    # Demo control system
-    from datetime import datetime, timedelta
-    
-    # Set demo expiration (you can change this date)
-    DEMO_EXPIRES = datetime(2025, 11, 1)  # November 1, 2025
-    DEMO_MODE = True  # Set to False for full version
-    
-    # Check if demo has expired
-    if DEMO_MODE and datetime.now() > DEMO_EXPIRES:
-        st.error("🔒 **Demo Period Expired**")
-        st.markdown("### This demonstration has expired.")
-        st.markdown("**Contact Rory at AI Architect Lab for full access:**")
-        st.markdown("📧 rory@aiarchitectlab.com")
-        st.stop()
-    
-    # Demo banner (optional - shows remaining time)
-    if DEMO_MODE:
-        days_left = (DEMO_EXPIRES - datetime.now()).days
-        if days_left <= 7:
-            st.warning(f"⚠️ **Demo expires in {days_left} days** - Contact rory@aiarchitectlab.com for full version")
-    
     # Header - Simplified and clean
     st.title("🏛️ CFPB Consumer Complaint Database Analysis")
     st.markdown("### Consumer Financial Protection Bureau - Complaint Trends and Analysis")
