@@ -18,12 +18,15 @@
   - Filter by product category
   - Adjustable number of complaints to display (10, 25, 50, 100, 200, 500, 1000, All)
   - **NEW:** "All" option to view all complaints in the system (e.g., all 51,466+ complaints)
+- **Month Selector** - Choose how many months of data to load (1-6 months) in the analysis options
 
 ### Fixed
 - **Consumer complaint narratives now display properly** with improved column detection
 - **Can now view all complaints** without the 200 complaint limit
+- **Fixed "Failed to load pre-filtered real CFPB data" error** in Quick Analysis
 - Enhanced narrative column detection with multiple fallback strategies
 - Better handling of missing narrative data with clear indicators
+- Added `__init__.py` to analysis package for proper imports
 
 ### Technical Improvements
 - Added new `show_consumer_complaints()` function to web_dashboard.py
