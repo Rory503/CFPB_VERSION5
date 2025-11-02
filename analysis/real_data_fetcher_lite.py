@@ -140,16 +140,35 @@ class RealDataFetcher:
             date_mask = (df['Date received'] >= self.start_date) & (df['Date received'] <= self.end_date)
             print(f"Date range filter: {date_mask.sum():,} complaints match")
             
-            # 2. Has narrative filter
-            narrative_mask = (
-                df['Consumer complaint narrative'].notna() & 
-                (df['Consumer complaint narrative'].str.strip() != '')
-            )
-            print(f"Narrative filter: {narrative_mask.sum():,} complaints with narratives")
+            # 2. Has narrative filter - check both column name variations
+            narrative_col = None
+            for col in ['Consumer complaint narrative', 'consumer_complaint_narrative']:
+                if col in df.columns:
+                    narrative_col = col
+                    break
             
-            # 3. Exclude credit reporting
-            product_mask = ~df['Product'].isin(self.credit_exclusions)
-            print(f"Excluding credit reporting: {(~product_mask).sum():,} excluded")
+            if narrative_col:
+                narrative_mask = (
+                    df[narrative_col].notna() & 
+                    (df[narrative_col].str.strip() != '')
+                )
+                print(f"Narrative filter: {narrative_mask.sum():,} complaints with narratives")
+            else:
+                print("WARNING: No narrative column found")
+                narrative_mask = pd.Series([True] * len(df))
+            
+            # 3. Exclude credit reporting - check both column name variations
+            product_col = None
+            for col in ['Product', 'product']:
+                if col in df.columns:
+                    product_col = col
+                    break
+            
+            if product_col:
+                product_mask = ~df[product_col].isin(self.credit_exclusions)
+                print(f"Excluding credit reporting: {(~product_mask).sum():,} excluded")
+            else:
+                product_mask = pd.Series([True] * len(df))
             
             # Apply all filters
             filtered_df = df[date_mask & narrative_mask & product_mask].copy()
