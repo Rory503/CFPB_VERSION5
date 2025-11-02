@@ -48,6 +48,8 @@ class RealDataFetcher:
         if self.credit_exclusions:
             not_in = ",".join([f"'{c}'" for c in self.credit_exclusions])
             where += f" AND product NOT IN({not_in})"
+        
+        print(f"DEBUG: WHERE clause = {where}")
 
         select_cols = [
             "complaint_id",

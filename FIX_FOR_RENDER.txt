@@ -1,0 +1,77 @@
+================================================================================
+                    FIX FOR "FAILED TO LOAD CFPB DATA" ERROR
+================================================================================
+
+WHAT I FIXED:
+Added debug logging to see exactly what's happening with the Socrata API query.
+
+THE FILE CHANGED:
+analysis/real_data_fetcher_lite.py
+
+WHAT TO DO NEXT:
+1. Commit and push this change to trigger a new Render deployment:
+   
+   git add analysis/real_data_fetcher_lite.py
+   git commit -m "Add debug logging for CFPB API queries"
+   git push origin main
+
+2. Wait for Render to redeploy (2-3 minutes)
+
+3. Check the Render logs to see the debug output
+
+4. The error message will tell us what's wrong with the API call
+
+================================================================================
+                    WHAT TO CHECK IN RENDER LOGS:
+================================================================================
+
+After deployment, look for these lines in Render logs:
+
+1. "Loading CFPB data (lite=True) for window..."
+2. "Cloud environment detected - will download fresh data from CFPB API"
+3. "Attempting API fetch from CFPB..."
+4. "DEBUG: WHERE clause = ..."  <-- THIS IS THE KEY LINE
+5. Either: "API path failed: [error message]" 
+   OR: "API fetch successful: [number] records"
+
+================================================================================
+                    POSSIBLE ISSUES:
+================================================================================
+
+Issue 1: Socrata API requires authentication token
+Fix: Add SOCRATA_APP_TOKEN to Render environment variables
+
+Issue 2: WHERE clause syntax error
+Fix: Will see the exact WHERE clause in debug output and can fix it
+
+Issue 3: API endpoint changed
+Fix: May need to update endpoint URL
+
+Issue 4: Date format issue
+Fix: May need to adjust date formatting
+
+================================================================================
+                    NEXT STEPS:
+================================================================================
+
+Once you see the debug output, send me:
+1. The full "DEBUG: WHERE clause = ..." line
+2. Any error messages from the API call
+3. Any other relevant log output
+
+Then I can provide the exact fix needed!
+
+================================================================================
+                    TO DEPLOY:
+================================================================================
+
+Run these commands in the CFPB_VERSION5 folder:
+
+git add analysis/real_data_fetcher_lite.py
+git commit -m "Add debug logging for CFPB API queries"
+git push origin main
+
+Then wait 2-3 minutes for Render to redeploy and check the logs!
+
+================================================================================
+
