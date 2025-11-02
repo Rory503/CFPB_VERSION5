@@ -181,30 +181,61 @@ def main():
         else:
             st.info("🔵 Ready to Analyze")
         
-        # Analysis Controls - SIMPLIFIED
+        # Analysis Controls
         st.markdown("### Analysis Options")
         
-        # Only month selection - NO analysis type options!
-        months_to_load = st.selectbox(
-            "Number of months to analyze:",
-            [1, 2, 3, 4, 5, 6],
-            index=3,  # Default to 4 months
-            help="Select how many months of CFPB complaint data to download and analyze (1-6 months). Data will be downloaded fresh from CFPB API."
+        # Analysis mode selection
+        analysis_mode = st.radio(
+            "Choose data source:",
+            ["Download from CFPB API", "Upload Your Own CSV"],
+            help="Download: Gets fresh data from CFPB | Upload: Use your own CSV file"
         )
         
-        st.info(f"📥 Will download complaints from the past **{months_to_load} month(s)** from CFPB API")
+        if analysis_mode == "Download from CFPB API":
+            # Month selection for API download
+            months_to_load = st.selectbox(
+                "Number of months to analyze:",
+                [1, 2, 3, 4, 5, 6],
+                index=3,
+                help="Select how many months of CFPB complaint data to download from API"
+            )
+            st.info(f"📥 Will download complaints from the past **{months_to_load} month(s)** from CFPB API")
+        else:
+            # File upload
+            months_to_load = 6  # Default for uploaded files
+            st.markdown("### 📁 Upload Your CSV File")
+            uploaded_file = st.file_uploader(
+                "Choose a CFPB complaints CSV file",
+                type="csv",
+                help="Upload a CSV file with CFPB complaint data"
+            )
+            
+            if uploaded_file is not None:
+                st.success(f"✅ File uploaded: {uploaded_file.name}")
+                st.info("Click 'Start Analysis' below to process your uploaded file")
+            else:
+                st.warning("⚠️ Please upload a CSV file before clicking Start Analysis")
         
         # Additional options
         generate_excel = st.checkbox("Generate Excel Export", value=True)
         auto_refresh = st.checkbox("Auto-refresh Visualizations", value=True)
         
-        # Run Analysis Button - ALWAYS downloads fresh data
+        # Run Analysis Button
         if st.button("🚀 Start Analysis", type="primary", use_container_width=True):
-            success = run_analysis(months_to_load, generate_excel)
-            if success:
-                st.rerun()
+            # Check if upload mode and no file
+            if analysis_mode == "Upload Your Own CSV":
+                if 'uploaded_file' not in locals() or uploaded_file is None:
+                    st.error("❌ Please upload a CSV file first!")
+                else:
+                    # Store uploaded file in session state
+                    st.session_state.uploaded_file = uploaded_file
+                    success = run_analysis(months_to_load, generate_excel, "upload")
+                    if success:
+                        st.rerun()
             else:
-                st.warning("Analysis failed. See error message above.")
+                success = run_analysis(months_to_load, generate_excel, "api")
+                if success:
+                    st.rerun()
         
         # Reset Analysis Button (for debugging/re-running)
         if st.session_state.analysis_complete:
@@ -332,11 +363,15 @@ def get_filtered_real_data(months_window=None):
     fetcher = RealDataFetcher()
     return fetcher.load_and_filter_data()
 
-def run_analysis(months_to_load, generate_excel):
-    """Run the CFPB analysis - ALWAYS downloads fresh data from CFPB API"""
+def run_analysis(months_to_load, generate_excel, mode="api"):
+    """Run the CFPB analysis - Downloads from API or processes uploaded file"""
     progress_container = st.container()
     with progress_container:
-        st.markdown("## 🚀 Downloading Fresh CFPB Data...")
+        if mode == "upload":
+            st.markdown("## 🚀 Processing Uploaded File...")
+        else:
+            st.markdown("## 🚀 Downloading Fresh CFPB Data...")
+        
         progress_bar = st.progress(0)
         status_text = st.empty()
         try:
@@ -353,32 +388,79 @@ def run_analysis(months_to_load, generate_excel):
                 
             analyzer = CFPBRealAnalyzer()
             
-            # ALWAYS download fresh data from CFPB API
-            status_text.text(f"📥 Downloading CFPB complaints for past {months_to_load} months from API...")
-            progress_bar.progress(30)
-            
-            # Use the API fetcher directly
-            try:
-                from analysis.real_data_fetcher_lite import RealDataFetcher
-                status_text.text(f"🌐 Fetching fresh data from CFPB API for {months_to_load} months...")
-                fetcher = RealDataFetcher()
-                analyzer.filtered_df = fetcher.load_and_filter_data()
-            except Exception as e:
-                st.error(f"Failed to fetch from API: {e}")
-                st.info("Trying alternative download method...")
-                # Fallback to full downloader
-                success = analyzer.load_real_data(force_download=True)
-                if not success or analyzer.filtered_df is None:
-                    st.error("❌ All download methods failed. CFPB API may be down. Please try again later.")
+            if mode == "upload":
+                # Process uploaded file
+                status_text.text("📄 Reading uploaded CSV file...")
+                progress_bar.progress(30)
+                
+                if 'uploaded_file' not in st.session_state:
+                    st.error("❌ No file uploaded")
                     return False
-            
-            if analyzer.filtered_df is None or len(analyzer.filtered_df) == 0:
-                st.error(f"❌ No data received from CFPB API for the past {months_to_load} months.")
-                st.info("💡 **Try:**\n- Select more months (e.g., 3-6 months)\n- Wait a few minutes and try again\n- CFPB API may be experiencing issues")
-                return False
-            
-            st.success(f"✅ Downloaded {len(analyzer.filtered_df):,} complaints for past {months_to_load} months")
-            progress_bar.progress(60)
+                
+                try:
+                    df = pd.read_csv(st.session_state.uploaded_file, low_memory=False)
+                    st.success(f"✅ Loaded {len(df):,} rows from uploaded file")
+                    
+                    # Normalize column names
+                    col_map = {c.lower().strip(): c for c in df.columns}
+                    def find_col(*names):
+                        for n in names:
+                            if n in df.columns: return n
+                            if n.lower() in col_map: return col_map[n.lower()]
+                        return None
+                    
+                    # Try to find required columns
+                    date_col = find_col('Date received', 'date_received')
+                    prod_col = find_col('Product', 'product')
+                    issue_col = find_col('Issue', 'issue')
+                    company_col = find_col('Company', 'company')
+                    
+                    if not all([date_col, prod_col, issue_col, company_col]):
+                        st.error("❌ Uploaded CSV is missing required columns. Need: Date received, Product, Issue, Company")
+                        return False
+                    
+                    # Convert date column
+                    df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+                    
+                    # Standardize column names
+                    df = df.rename(columns={
+                        date_col: 'Date received',
+                        prod_col: 'Product',
+                        issue_col: 'Issue',
+                        company_col: 'Company'
+                    })
+                    
+                    analyzer.filtered_df = df
+                    progress_bar.progress(60)
+                    
+                except Exception as e:
+                    st.error(f"❌ Error reading CSV: {str(e)}")
+                    return False
+            else:
+                # Download from API
+                status_text.text(f"📥 Downloading CFPB complaints for past {months_to_load} months from API...")
+                progress_bar.progress(30)
+                
+                try:
+                    from analysis.real_data_fetcher_lite import RealDataFetcher
+                    status_text.text(f"🌐 Fetching fresh data from CFPB API for {months_to_load} months...")
+                    fetcher = RealDataFetcher()
+                    analyzer.filtered_df = fetcher.load_and_filter_data()
+                except Exception as e:
+                    st.error(f"Failed to fetch from API: {e}")
+                    st.info("Trying alternative download method...")
+                    success = analyzer.load_real_data(force_download=True)
+                    if not success or analyzer.filtered_df is None:
+                        st.error("❌ All download methods failed. CFPB API may be down. Please try again later.")
+                        return False
+                
+                if analyzer.filtered_df is None or len(analyzer.filtered_df) == 0:
+                    st.error(f"❌ No data received from CFPB API for the past {months_to_load} months.")
+                    st.info("💡 **Try:**\n- Select more months (e.g., 3-6 months)\n- Wait a few minutes and try again")
+                    return False
+                
+                st.success(f"✅ Downloaded {len(analyzer.filtered_df):,} complaints for past {months_to_load} months")
+                progress_bar.progress(60)
             # Generate analysis
             status_text.text("Processing complaint data and generating analysis...")
             progress_bar.progress(60)
