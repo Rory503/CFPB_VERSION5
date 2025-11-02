@@ -401,36 +401,76 @@ def run_analysis(months_to_load, generate_excel, mode="api"):
                     df = pd.read_csv(st.session_state.uploaded_file, low_memory=False)
                     st.success(f"✅ Loaded {len(df):,} rows from uploaded file")
                     
-                    # Normalize column names
-                    col_map = {c.lower().strip(): c for c in df.columns}
+                    # Show what columns we found
+                    st.info(f"📋 Found columns: {', '.join(df.columns[:10].tolist())}")
+                    
+                    # Create flexible column matcher
+                    col_map = {c.lower().strip().replace(' ', '').replace('_', '').replace('-', ''): c for c in df.columns}
+                    
                     def find_col(*names):
+                        # Try exact match first
                         for n in names:
-                            if n in df.columns: return n
-                            if n.lower() in col_map: return col_map[n.lower()]
+                            if n in df.columns:
+                                return n
+                        # Try case-insensitive
+                        for n in names:
+                            if n.lower() in [c.lower() for c in df.columns]:
+                                return [c for c in df.columns if c.lower() == n.lower()][0]
+                        # Try removing spaces/underscores
+                        for n in names:
+                            clean_n = n.lower().replace(' ', '').replace('_', '').replace('-', '')
+                            if clean_n in col_map:
+                                return col_map[clean_n]
                         return None
                     
-                    # Try to find required columns
-                    date_col = find_col('Date received', 'date_received')
-                    prod_col = find_col('Product', 'product')
-                    issue_col = find_col('Issue', 'issue')
-                    company_col = find_col('Company', 'company')
+                    # Try to find required columns with MANY variations
+                    date_col = find_col('Date received', 'date_received', 'datereceived', 'date', 'received_date', 'complaint_date', 'Date Received')
+                    prod_col = find_col('Product', 'product', 'prod', 'product_type', 'complaint_type')
+                    issue_col = find_col('Issue', 'issue', 'complaint_issue', 'problem', 'complaint')
+                    company_col = find_col('Company', 'company', 'business', 'company_name', 'institution')
                     
-                    if not all([date_col, prod_col, issue_col, company_col]):
-                        st.error("❌ Uploaded CSV is missing required columns. Need: Date received, Product, Issue, Company")
+                    # Show what we found or didn't find
+                    found = []
+                    missing = []
+                    if date_col: found.append(f"Date: {date_col}")
+                    else: missing.append("Date column")
+                    if prod_col: found.append(f"Product: {prod_col}")
+                    else: missing.append("Product column")
+                    if issue_col: found.append(f"Issue: {issue_col}")
+                    else: missing.append("Issue column")
+                    if company_col: found.append(f"Company: {company_col}")
+                    else: missing.append("Company column")
+                    
+                    if found:
+                        st.success(f"✅ Matched columns: {', '.join(found)}")
+                    
+                    if missing:
+                        st.error(f"❌ Could not find: {', '.join(missing)}")
+                        st.warning("⚠️ Available columns in your file:")
+                        st.write(df.columns.tolist())
+                        st.info("💡 Your CSV should have columns like: Date received, Product, Issue, Company")
                         return False
                     
                     # Convert date column
-                    df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+                    if date_col:
+                        df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
                     
                     # Standardize column names
-                    df = df.rename(columns={
-                        date_col: 'Date received',
-                        prod_col: 'Product',
-                        issue_col: 'Issue',
-                        company_col: 'Company'
-                    })
+                    rename_map = {}
+                    if date_col and date_col != 'Date received':
+                        rename_map[date_col] = 'Date received'
+                    if prod_col and prod_col != 'Product':
+                        rename_map[prod_col] = 'Product'
+                    if issue_col and issue_col != 'Issue':
+                        rename_map[issue_col] = 'Issue'
+                    if company_col and company_col != 'Company':
+                        rename_map[company_col] = 'Company'
+                    
+                    if rename_map:
+                        df = df.rename(columns=rename_map)
                     
                     analyzer.filtered_df = df
+                    st.success(f"✅ Successfully processed {len(df):,} complaints")
                     progress_bar.progress(60)
                     
                 except Exception as e:
