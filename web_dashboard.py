@@ -156,23 +156,58 @@ def main():
         st.session_state.analysis_data = None
     if 'analysis_complete' not in st.session_state:
         st.session_state.analysis_complete = False
+    if 'data_loaded' not in st.session_state:
+        st.session_state.data_loaded = False
+    if 'loaded_data' not in st.session_state:
+        st.session_state.loaded_data = None
     
     # Sidebar
     with st.sidebar:
+        st.markdown("## 📁 Load CSV Files")
+        
+        # DIRECT FILE UPLOAD - NO ANALYSIS BUTTON NEEDED
+        st.markdown("### Upload & Load Immediately")
+        uploaded_files = st.file_uploader(
+            "Choose CSV file(s)",
+            type="csv",
+            accept_multiple_files=True,
+            help="Upload one or more CFPB CSV files. They will load immediately.",
+            key="direct_upload"
+        )
+        
+        if uploaded_files:
+            if st.button("📥 Load These Files Now", type="primary", key="load_direct"):
+                try:
+                    dfs = []
+                    for file in uploaded_files:
+                        df = pd.read_csv(file, low_memory=False)
+                        st.success(f"✅ Loaded {file.name}: {len(df):,} rows")
+                        dfs.append(df)
+                    
+                    # Combine all files
+                    combined_df = pd.concat(dfs, ignore_index=True)
+                    st.success(f"🎉 Total: {len(combined_df):,} complaints loaded!")
+                    
+                    # Store in session
+                    st.session_state.loaded_data = combined_df
+                    st.session_state.data_loaded = True
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"Error: {e}")
+        
+        st.markdown("---")
+        
+        # Show loaded data status
+        if st.session_state.get('data_loaded', False):
+            st.success(f"✅ {len(st.session_state.loaded_data):,} complaints loaded")
+            if st.button("🗑️ Clear Loaded Data"):
+                st.session_state.data_loaded = False
+                st.session_state.loaded_data = None
+                st.rerun()
+        
+        st.markdown("---")
         st.markdown("## Analysis Controls")
-        
-        # Check for data availability
-        import os
-        data_available = os.path.exists("data/complaints_filtered.csv") or os.path.exists("data/complaints.csv")
-        
-        # Data Status Indicator
-        st.markdown("### 📊 Data Status")
-        if data_available:
-            st.success("✅ CFPB Data Available")
-            st.caption("Pre-filtered data ready in data/ folder")
-        else:
-            st.warning("⚠️ No local data found")
-            st.caption("Use 'Full Analysis' to download data")
         
         # Analysis Status
         st.markdown("### Analysis Status")
@@ -264,10 +299,50 @@ def main():
                 st.metric("Digital Fraud Cases", fraud_count)
     
     # Main Content Area
-    if not st.session_state.analysis_complete:
+    if st.session_state.get('data_loaded', False):
+        # Show loaded data immediately
+        show_loaded_data_view()
+    elif not st.session_state.analysis_complete:
         show_welcome_screen()
     else:
         show_analysis_dashboard()
+
+def show_loaded_data_view():
+    """Show the loaded CSV data immediately"""
+    st.title("📊 Loaded Data Viewer")
+    
+    df = st.session_state.loaded_data
+    
+    # Quick stats
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Rows", f"{len(df):,}")
+    with col2:
+        st.metric("Columns", len(df.columns))
+    with col3:
+        if 'Company' in df.columns:
+            st.metric("Unique Companies", f"{df['Company'].nunique():,}")
+    with col4:
+        if 'Product' in df.columns:
+            st.metric("Unique Products", f"{df['Product'].nunique():,}")
+    
+    # Show columns
+    st.markdown("### 📋 Available Columns")
+    st.write(df.columns.tolist())
+    
+    # Data preview
+    st.markdown("### 👀 Data Preview (First 100 rows)")
+    st.dataframe(df.head(100), use_container_width=True)
+    
+    # Download option
+    st.markdown("### 📥 Download Data")
+    csv = df.to_csv(index=False)
+    st.download_button(
+        label="Download as CSV",
+        data=csv,
+        file_name="loaded_complaints.csv",
+        mime="text/csv"
+    )
 
 def show_welcome_screen():
     """Show welcome screen with system info"""
