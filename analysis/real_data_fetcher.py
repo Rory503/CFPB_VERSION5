@@ -110,32 +110,36 @@ class CFPBRealDataFetcher:
         """
         Load real CFPB data and apply filters as specified
         """
-        # First try to use the pre-filtered fast dataset
+        # First try to use the pre-filtered fast dataset - Accept files up to 30 days old
         fast_file = "data/complaints_filtered.csv"
         if os.path.exists(fast_file):
             print("📊 Loading pre-filtered CFPB data (REAL data, optimized for speed)...")
             try:
-                # Check cache age - ignore if older than 1 day to avoid stale data
+                # Check cache age - accept files up to 30 days old
                 cache_age = datetime.now() - datetime.fromtimestamp(os.path.getmtime(fast_file))
-                if cache_age.days < 1:
+                if cache_age.days < 30:  # Changed from 1 to 30 days
+                    print(f"📁 Using cached file (age: {cache_age.days} days)")
                     df = pd.read_csv(fast_file, low_memory=False)
-                    print(f"✅ Loaded {len(df):,} real CFPB complaints (pre-filtered)")
+                    print(f"📊 Loaded {len(df):,} complaints from cache")
                     
                     # Convert date columns
                     df['Date received'] = pd.to_datetime(df['Date received'])
                     df['Date sent to company'] = pd.to_datetime(df['Date sent to company'], errors='coerce')
                     
-                    # Check if data is in current date range
-                    if len(df) > 0:
-                        max_date = df['Date received'].max()
-                        if max_date.date() >= self.start_date.date():
-                            return df
-                        else:
-                            print("⚠️  Cached data is outside current date range, refreshing...")
+                    # Filter to the requested date range
+                    print(f"🔍 Filtering data to date range: {self.start_date:%Y-%m-%d} to {self.end_date:%Y-%m-%d}")
+                    date_mask = (df['Date received'] >= self.start_date) & (df['Date received'] <= self.end_date)
+                    df_filtered = df[date_mask].copy()
+                    
+                    if len(df_filtered) > 0:
+                        print(f"✅ Loaded {len(df_filtered):,} real CFPB complaints for date range")
+                        return df_filtered
+                    else:
+                        print("⚠️ No complaints found in date range, loading full dataset...")
                 else:
-                    print(f"⚠️  Cache is {cache_age.days} days old, refreshing...")
+                    print(f"⚠️ Cache is {cache_age.days} days old, loading full dataset...")
             except Exception as e:
-                print(f"⚠️  Error loading fast file: {e}")
+                print(f"⚠️ Error loading fast file: {e}")
                 print("📊 Falling back to full dataset...")
         
         # Skip Socrata API - use local files only

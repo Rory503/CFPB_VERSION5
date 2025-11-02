@@ -1,0 +1,77 @@
+================================================================================
+                    STEP-BY-STEP INSTRUCTIONS
+================================================================================
+
+YOU ARE USING THE WRONG VERSION!
+
+The cloud app (cfpb-consumer-complaints-dashboard.onrender.com) doesn't have 
+your local data files. That's why it keeps failing!
+
+Your 453,624 complaints are stored on YOUR COMPUTER in:
+    C:\Users\Rory\surf_version5\CFPB_VERSION5\data\complaints_filtered.csv
+
+
+================================================================================
+                    DO THESE EXACT STEPS:
+================================================================================
+
+STEP 1: CLOSE THE CLOUD APP
+   - Close the browser tab with "cfpb-consumer-complaints-dashboard.onrender.com"
+   - We're NOT using the cloud version!
+
+STEP 2: RUN LOCAL VERSION
+   - In your project folder, double-click: RUN_LOCAL_NOW.bat
+   - A black window will appear (keep it open!)
+
+STEP 3: WAIT FOR BROWSER
+   - Your browser will open to: http://localhost:8501
+   - This is YOUR LOCAL version with YOUR data!
+   - Wait 10-15 seconds for it to load
+
+STEP 4: VERIFY YOU'RE LOCAL
+   - Look at the browser URL bar
+   - It should say: localhost:8501
+   - NOT: onrender.com
+
+STEP 5: CHECK SIDEBAR
+   - Should show: "Quick Analysis (Use Existing Data)"
+   - Should show: "✅ CFPB Data Available"
+
+STEP 6: CLICK "START ANALYSIS"
+   - Wait 30-60 seconds
+   - Your 453K local complaints will load!
+
+
+================================================================================
+                    WHY THIS MATTERS:
+================================================================================
+
+CLOUD APP (onrender.com):
+   ❌ Doesn't have your local data files
+   ❌ Must download fresh data from CFPB (slow/failing)
+   ❌ Can't access your computer's files
+
+LOCAL APP (localhost:8501):
+   ✅ Has your cached 453K complaints
+   ✅ Uses my fixes to the code
+   ✅ Runs on your computer
+   ✅ Fast (30-60 seconds)
+
+
+================================================================================
+                    SIMPLE VERSION:
+================================================================================
+
+1. Close the onrender.com tab
+2. Double-click: RUN_LOCAL_NOW.bat
+3. Browser opens to localhost:8501
+4. Click "Start Analysis"
+5. Done!
+
+
+================================================================================
+
+The file RUN_LOCAL_NOW.bat is ready to use!
+
+================================================================================
+

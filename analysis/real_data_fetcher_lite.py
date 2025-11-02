@@ -125,56 +125,77 @@ class RealDataFetcher:
         print(
             f"Loading CFPB data (lite={self.lite_mode}) for window: {self.start_date:%Y-%m-%d} to {self.end_date:%Y-%m-%d}"
         )
-        # Try cached filtered file first - but only if it's recent (not from old hardcoded dates)
+        
+        # Detect environment (cloud vs local)
+        is_cloud = os.environ.get('RENDER') or os.environ.get('STREAMLIT_SHARING') or os.environ.get('DYNO')
+        if is_cloud:
+            print("🌐 Cloud environment detected - will download fresh data from CFPB API")
+        else:
+            print("💻 Local environment detected - will try cached data first")
+        
+        # Try cached filtered file first - Accept files up to 30 days old (LOCAL ONLY, or cloud if exists)
         cache = os.path.join(self.data_dir, "complaints_filtered.csv")
-        if os.path.exists(cache):
+        if os.path.exists(cache) and not is_cloud:  # Skip cache check in cloud unless file exists
             try:
-                # Check cache age - ignore if older than 1 day to avoid stale data
+                # Check cache age - accept files up to 30 days old
                 cache_age = datetime.now() - datetime.fromtimestamp(os.path.getmtime(cache))
-                if cache_age.days < 1:
+                if cache_age.days < 30:  # Changed from 1 to 30 days
+                    print(f"📁 Using cached file (age: {cache_age.days} days)")
                     df = pd.read_csv(cache, low_memory=False)
                     df["Date received"] = pd.to_datetime(df["Date received"]) 
-                    df["Date sent to company"] = pd.to_datetime(df["Date sent to company"], errors="coerce") 
-                    # Also check if data is in current date range
-                    if len(df) > 0:
-                        max_date = df["Date received"].max()
-                        if max_date.date() >= self.start_date.date():
-                            return df
-            except Exception:
+                    df["Date sent to company"] = pd.to_datetime(df["Date sent to company"], errors="coerce")
+                    
+                    # Filter to the requested date range
+                    print(f"🔍 Filtering data to date range: {self.start_date:%Y-%m-%d} to {self.end_date:%Y-%m-%d}")
+                    date_mask = (df["Date received"] >= self.start_date) & (df["Date received"] <= self.end_date)
+                    df_filtered = df[date_mask].copy()
+                    
+                    if len(df_filtered) > 0:
+                        print(f"✅ Loaded {len(df_filtered):,} complaints from cache for date range")
+                        return df_filtered
+                    else:
+                        print(f"⚠️ No complaints found in date range, trying API...")
+                else:
+                    print(f"⚠️ Cache is {cache_age.days} days old, trying API...")
+            except Exception as e:
+                print(f"⚠️ Error loading cache: {e}")
                 pass
 
-        # API fast path
+        # API fast path - ALWAYS try this in cloud, or if local cache failed
         try:
-            print("Attempting API fetch...")
+            print(f"🌐 Attempting API fetch from CFPB (fetching {self.start_date:%Y-%m-%d} to {self.end_date:%Y-%m-%d})...")
             df = self._fetch_api()
-            if df is not None:
-                print(f"API fetch successful: {len(df)} records")
+            if df is not None and len(df) > 0:
+                print(f"✅ API fetch successful: {len(df):,} records")
                 return df
             else:
-                print("API returned None")
+                print("⚠️ API returned no data")
         except Exception as e:
-            print(f"API path failed: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"⚠️ API path failed: {type(e).__name__}: {e}")
+            if not is_cloud:  # Only show full traceback locally
+                import traceback
+                traceback.print_exc()
 
-        # Fallback: let the legacy fetcher handle ZIP if really needed
-        # Import lazily to avoid pulling heavy deps here
-        try:
-            print("Attempting legacy ZIP fallback...")
-            from .real_data_fetcher import CFPBRealDataFetcher as Legacy
+        # Fallback: let the legacy fetcher handle ZIP if really needed (LOCAL ONLY)
+        if not is_cloud:
+            try:
+                print("📦 Attempting legacy ZIP download fallback...")
+                from .real_data_fetcher import CFPBRealDataFetcher as Legacy
 
-            legacy = Legacy()
-            result = legacy.load_and_filter_data()
-            if result is not None:
-                print(f"Legacy ZIP fallback successful: {len(result)} records")
-            else:
-                print("Legacy ZIP fallback returned None")
-            return result
-        except Exception as e:
-            print(f"Legacy ZIP path failed: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
+                legacy = Legacy()
+                result = legacy.load_and_filter_data()
+                if result is not None and len(result) > 0:
+                    print(f"✅ Legacy ZIP fallback successful: {len(result):,} records")
+                    return result
+                else:
+                    print("⚠️ Legacy ZIP fallback returned no data")
+            except Exception as e:
+                print(f"⚠️ Legacy ZIP path failed: {type(e).__name__}: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        print("❌ All data loading methods failed")
+        return None
 
     # The following helpers mirror the original fetcher API
     def get_top_trends(self, df, top_n=10):

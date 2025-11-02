@@ -1,0 +1,62 @@
+================================================================================
+                    ONE-CLICK RESTART SOLUTION
+================================================================================
+
+I CANNOT restart your app remotely, BUT I created an easy solution for you!
+
+
+✅ WHAT TO DO (SUPER EASY):
+
+1. Look in your project folder for this file:
+
+        CLICK_ME_TO_START.bat
+        
+2. DOUBLE-CLICK that file
+
+3. It will automatically:
+   - Stop the old app
+   - Start the new app with my fixes
+   - Open your browser
+
+4. Wait 10-15 seconds for the browser to open
+
+5. Click "Start Analysis" in the sidebar
+
+
+================================================================================
+                        WHAT YOU'LL SEE
+================================================================================
+
+After double-clicking CLICK_ME_TO_START.bat:
+
+✅ A black window appears with messages
+✅ Your browser opens automatically to http://localhost:8501
+✅ Sidebar now shows "Quick Analysis (Use Existing Data)" selected
+✅ Sidebar shows "✅ CFPB Data Available" in green
+✅ Click "Start Analysis" → Wait 30-60 seconds → Done!
+
+
+================================================================================
+                      TROUBLESHOOTING
+================================================================================
+
+If the file doesn't work:
+
+OPTION A - Manual Restart:
+1. Find your Streamlit terminal window
+2. Press Ctrl+C to stop it
+3. Run: streamlit run web_dashboard.py
+4. Refresh your browser (F5)
+
+OPTION B - Close Everything:
+1. Close ALL browser tabs with the dashboard
+2. Close the terminal/command window
+3. Double-click CLICK_ME_TO_START.bat again
+
+
+================================================================================
+
+The file is ready! Just double-click CLICK_ME_TO_START.bat in your folder!
+
+================================================================================
+

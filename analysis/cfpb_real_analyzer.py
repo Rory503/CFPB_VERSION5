@@ -17,6 +17,7 @@ try:
     from real_data_fetcher_lite import RealDataFetcher as CFPBRealDataFetcher
 except Exception:
     from real_data_fetcher import CFPBRealDataFetcher
+
 warnings.filterwarnings('ignore')
 
 class CFPBRealAnalyzer:

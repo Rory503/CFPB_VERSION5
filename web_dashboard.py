@@ -161,141 +161,50 @@ def main():
     with st.sidebar:
         st.markdown("## Analysis Controls")
         
-        # Analysis Status
-        st.markdown("### Current Status")
-        if st.session_state.analysis_complete:
-            st.success("Analysis Complete")
-        else:
-            st.info("Ready to Analyze")
+        # Check for data availability
+        import os
+        data_available = os.path.exists("data/complaints_filtered.csv") or os.path.exists("data/complaints.csv")
         
-        # Analysis Controls
+        # Data Status Indicator
+        st.markdown("### 📊 Data Status")
+        if data_available:
+            st.success("✅ CFPB Data Available")
+            st.caption("Pre-filtered data ready in data/ folder")
+        else:
+            st.warning("⚠️ No local data found")
+            st.caption("Use 'Full Analysis' to download data")
+        
+        # Analysis Status
+        st.markdown("### Analysis Status")
+        if st.session_state.analysis_complete:
+            st.success("✅ Analysis Complete")
+        else:
+            st.info("🔵 Ready to Analyze")
+        
+        # Analysis Controls - SIMPLIFIED
         st.markdown("### Analysis Options")
         
-        # Month selection for data loading
+        # Only month selection - NO analysis type options!
         months_to_load = st.selectbox(
-            "Load data for past:",
+            "Number of months to analyze:",
             [1, 2, 3, 4, 5, 6],
-            index=3,
-            help="Select how many months of complaint data to load (1-6 months)"
+            index=3,  # Default to 4 months
+            help="Select how many months of CFPB complaint data to download and analyze (1-6 months). Data will be downloaded fresh from CFPB API."
         )
         
-        analysis_type = st.selectbox(
-            "Analysis Type",
-            ["Upload Your Own CSV", "Quick Analysis (Use Existing Data)", "Full Analysis (Download Latest Data)"],
-            help="Upload your own CSV file or use existing data"
-        )
+        st.info(f"📥 Will download complaints from the past **{months_to_load} month(s)** from CFPB API")
         
-        # File upload section
-        if analysis_type == "Upload Your Own CSV":
-            st.markdown("### 📁 Upload CFPB Data")
-            uploaded_file = st.file_uploader(
-                "Choose a CSV file",
-                type="csv",
-                help="Upload a CFPB complaints CSV file. Should have columns like 'Complaint ID', 'Date received', 'Product', 'Issue', 'Company', 'State', 'Consumer complaint narrative'"
-            )
-            
-            if uploaded_file is not None:
-                try:
-                    # Load the uploaded file
-                    df = pd.read_csv(uploaded_file, low_memory=False)
-                    st.success(f"✅ Loaded {len(df):,} complaints from uploaded file")
-                    
-                    # Show column info
-                    st.info(f"📊 Columns found: {', '.join(df.columns.tolist())}")
-                    
-                    # Store in session state for analysis
-                    st.session_state.uploaded_data = df
-
-                    # Quick Preview option to open dashboard immediately without heavy processing
-                    if st.button("🚀 Open Preview Now", type="primary"):
-                        # Minimal analyzer stub
-                        class _Stub: pass
-                        stub = _Stub()
-                        # Normalize minimal fields for charts that need them
-                        col_map = {c.lower().strip(): c for c in df.columns}
-                        def col(*names):
-                            for n in names:
-                                if n in df.columns:
-                                    return n
-                                ln = n.lower()
-                                if ln in col_map:
-                                    return col_map[ln]
-                            return None
-                        prod = col('Product','product')
-                        issue = col('Issue','issue')
-                        company = col('Company','company')
-                        date_received = col('Date received','date_received')
-                        state = col('State','state')
-                        narr = col('Consumer complaint narrative','consumer_complaint_narrative','narrative')
-                        needed = [x for x in [prod, issue, company, date_received, state, narr] if x]
-                        df_small = df[needed].copy()
-                        if date_received:
-                            import pandas as _pd
-                            df_small[date_received] = _pd.to_datetime(df_small[date_received], errors='coerce')
-                        # Rename to expected names where possible
-                        rename = {}
-                        if prod and prod != 'Product': rename[prod] = 'Product'
-                        if issue and issue != 'Issue': rename[issue] = 'Issue'
-                        if company and company != 'Company': rename[company] = 'Company'
-                        if state and state != 'State': rename[state] = 'State'
-                        if narr and narr != 'Consumer complaint narrative': rename[narr] = 'Consumer complaint narrative'
-                        if date_received and date_received != 'Date received': rename[date_received] = 'Date received'
-                        df_small.rename(columns=rename, inplace=True)
-                        # Minimal session for dashboard
-                        st.session_state.analysis_complete = True
-                        st.session_state.analyzer = _Stub()
-                        st.session_state.analyzer.filtered_df = df_small
-                        # Build lightweight summary/trends directly
-                        import pandas as _pd
-                        summary = {
-                            'total_complaints': len(df_small),
-                            'unique_companies': df_small['Company'].nunique() if 'Company' in df_small.columns else 0,
-                            'unique_products': df_small['Product'].nunique() if 'Product' in df_small.columns else 0,
-                            'unique_states': df_small['State'].nunique() if 'State' in df_small.columns else 0,
-                            'date_range': f"{str(df_small['Date received'].min())[:10]} to {str(df_small['Date received'].max())[:10]}",
-                            'analysis_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                        }
-                        trends = {
-                            'top_products': (df_small['Product'].value_counts() if 'Product' in df_small.columns else _pd.Series(dtype=int)),
-                            'top_issues': (df_small['Issue'].value_counts() if 'Issue' in df_small.columns else _pd.Series(dtype=int)),
-                            'sub_trends': {}
-                        }
-                        companies = {}
-                        if 'Company' in df_small.columns:
-                            top_companies = df_small['Company'].value_counts().head(10)
-                            for name in top_companies.index:
-                                subset = df_small[df_small['Company'] == name]
-                                companies[name] = {
-                                    'total_complaints': len(subset),
-                                    'top_issues': (subset['Issue'].value_counts().head(5).to_dict() if 'Issue' in subset.columns else {}),
-                                    'sample_complaints': []
-                                }
-                        st.session_state.analysis_data = {
-                            'summary': summary,
-                            'trends': trends,
-                            'companies': companies,
-                            'special_categories': {'ai_complaints': [], 'lep_complaints': [], 'fraud_digital_complaints': []}
-                        }
-                        st.rerun()
-                    
-                except Exception as e:
-                    st.error(f"❌ Error loading file: {str(e)}")
-        
+        # Additional options
         generate_excel = st.checkbox("Generate Excel Export", value=True)
         auto_refresh = st.checkbox("Auto-refresh Visualizations", value=True)
         
-        # Run Analysis Button
-        if st.button("Start Analysis", type="primary"):
-            # Only run if analysis hasn't been completed yet or if explicitly requested
-            if not st.session_state.analysis_complete:
-                success = run_analysis(analysis_type, generate_excel, months_to_load)
-                # Only rerun on success so any error remains visible instead of flashing
-                if success:
-                    st.rerun()
-                else:
-                    st.warning("Analysis failed or was interrupted. See the error above; not auto-retrying.")
+        # Run Analysis Button - ALWAYS downloads fresh data
+        if st.button("🚀 Start Analysis", type="primary", use_container_width=True):
+            success = run_analysis(months_to_load, generate_excel)
+            if success:
+                st.rerun()
             else:
-                st.info("Analysis already completed! Check the main area for results.")
+                st.warning("Analysis failed. See error message above.")
         
         # Reset Analysis Button (for debugging/re-running)
         if st.session_state.analysis_complete:
@@ -335,40 +244,50 @@ def show_welcome_screen():
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        st.markdown("## Analysis Parameters")
+        st.markdown("## 🚀 Simple 3-Step Process")
+        
+        st.success("✅ **Ready to analyze real CFPB complaints!**")
+        
+        st.markdown("### 📋 How It Works:")
+        st.markdown("""
+        1. **Select months**: Choose 1-6 months in the sidebar (recommended: 3-4 months)
+        2. **Click "Start Analysis"**: Downloads fresh data from CFPB API
+        3. **View results**: Interactive dashboard with charts, trends, and insights!
+        
+        ⏱️ **Analysis time:** 1-3 minutes (depending on number of months selected)
+        """)
+        
+        st.markdown("### 📊 What You Get:")
+        
+        st.markdown("""
+        - 📈 **Top Complaint Trends** - Most common issues and products
+        - 🏢 **Company Rankings** - Most complained-about companies
+        - 🤖 **AI Bias Detection** - Algorithmic decision complaints
+        - 🌐 **Language Access Issues** - LEP and Spanish language barriers
+        - 🚨 **Fraud Patterns** - Identity theft and digital scams
+        - 📊 **Excel Export** - Full data with verification links
+        - 🔗 **CFPB Verification** - Every complaint links to CFPB.gov
+        """)
+        
+        st.markdown("### 🎯 Data Source:")
         
         specs_data = {
-            "Parameter": [
-                "Analysis Period",
-                "Data Source", 
-                "Filtering Criteria",
-                "Excluded Categories",
-                "Focus Areas",
-                "Export Formats"
+            "Aspect": [
+                "Source", 
+                "Freshness",
+                "Filter",
+                "Focus"
             ],
-            "Value": [
-                "Last 6 months (April 19 - October 19, 2025)",
-                "CFPB Consumer Complaint Database (Official)",
-                "Complaints with consumer narratives only, excludes credit reporting",
-                "Credit reporting agencies (Equifax, Experian, TransUnion)",
-                "Algorithmic bias, Limited English Proficiency, Digital fraud",
-                "Markdown reports, Excel spreadsheets, Interactive charts"
+            "Details": [
+                "CFPB Consumer Complaint Database (Official API)",
+                "Always downloads latest data - never cached",
+                "Complaints with narratives only, excludes credit reporting",
+                "AI bias, Language access, Digital fraud"
             ]
         }
         
         specs_df = pd.DataFrame(specs_data)
-        st.dataframe(specs_df, width=800, hide_index=True)
-        
-        st.markdown("## Real CFPB Data Analysis")
-        
-        st.info("📊 **All data comes directly from the official CFPB Consumer Complaint Database**")
-        st.markdown("""
-        **Data Source**: https://files.consumerfinance.gov/ccdb/complaints.csv.zip  
-        **No Mock Data**: System only processes real complaint data  
-        **Verification**: Every complaint includes link to CFPB.gov for verification  
-        
-        Click **"Start Analysis"** to load and analyze real CFPB complaint data.
-        """)
+        st.dataframe(specs_df, hide_index=True, use_container_width=True)
     
     with col2:
         st.markdown("## Analysis Outputs")
@@ -413,109 +332,53 @@ def get_filtered_real_data(months_window=None):
     fetcher = RealDataFetcher()
     return fetcher.load_and_filter_data()
 
-def run_analysis(analysis_type, generate_excel, months_to_load=6):
-    """Run the CFPB analysis; returns True on success, False on failure."""
+def run_analysis(months_to_load, generate_excel):
+    """Run the CFPB analysis - ALWAYS downloads fresh data from CFPB API"""
     progress_container = st.container()
     with progress_container:
-        st.markdown("## 🚀 Running Analysis...")
+        st.markdown("## 🚀 Downloading Fresh CFPB Data...")
         progress_bar = st.progress(0)
         status_text = st.empty()
         try:
-            # Set MONTHS_WINDOW environment variable BEFORE creating analyzers
+            # Set MONTHS_WINDOW environment variable
             import os
             os.environ['MONTHS_WINDOW'] = str(months_to_load)
             
             status_text.text("Initializing CFPB Data Analyzer...")
             progress_bar.progress(10)
+            
             if CFPBRealAnalyzer is None:
-                st.error("Analysis modules not available")
+                st.error("❌ Analysis modules not available")
                 return False
+                
             analyzer = CFPBRealAnalyzer()
-            # Data loading logic
-            status_text.text("Loading CFPB complaint database...")
+            
+            # ALWAYS download fresh data from CFPB API
+            status_text.text(f"📥 Downloading CFPB complaints for past {months_to_load} months from API...")
             progress_bar.progress(30)
-            if analysis_type == "Upload Your Own CSV":
-                # Use uploaded data
-                if 'uploaded_data' not in st.session_state or st.session_state.uploaded_data is None:
-                    st.error("No CSV file uploaded. Please upload a file first.")
-                    return False
-                df = st.session_state.uploaded_data.copy()
-                
-                # Normalize column names to expected format
-                col_map = {c.lower().strip(): c for c in df.columns}
-                def pick(*names):
-                    for n in names:
-                        if n in df.columns:
-                            return n
-                        ln = n.lower()
-                        if ln in col_map:
-                            return col_map[ln]
-                    return None
-                required = {
-                    'Complaint ID': pick('Complaint ID','complaint_id','id'),
-                    'Date received': pick('Date received','date_received'),
-                    'Date sent to company': pick('Date sent to company','date_sent_to_company'),
-                    'Product': pick('Product','product'),
-                    'Issue': pick('Issue','issue'),
-                    'Company': pick('Company','company'),
-                    'State': pick('State','state'),
-                    'Consumer complaint narrative': pick('Consumer complaint narrative','consumer_complaint_narrative','narrative')
-                }
-                missing = [k for k,v in required.items() if v is None]
-                if missing:
-                    st.error(f"Uploaded CSV is missing required columns: {', '.join(missing)}")
-                    return False
-                # Select and rename only needed columns (reduces memory)
-                df_small = df[[required[k] for k in required]].rename(columns={required[k]:k for k in required})
-                
-                # Convert dates
-                try:
-                    df_small['Date received'] = pd.to_datetime(df_small['Date received'])
-                    if 'Date sent to company' in df_small.columns:
-                        df_small['Date sent to company'] = pd.to_datetime(df_small['Date sent to company'], errors='coerce')
-                except Exception:
-                    pass
-                
-                # Limit very large uploads for responsiveness
-                if len(df_small) > 250_000:
-                    df_small = df_small.head(250_000)
-                    st.info("Large file detected – analyzing first 250,000 rows for speed.")
-                
-                analyzer.filtered_df = df_small
-                st.success(f"Successfully loaded {len(analyzer.filtered_df):,} complaints from uploaded file")
-            elif analysis_type == "Quick Analysis (Use Existing Data)":
-                # Use data with specified month window - MONTHS_WINDOW already set above
-                try:
-                    from analysis.real_data_fetcher_lite import RealDataFetcher as RealDataFetcher
-                except Exception:
-                    from analysis.real_data_fetcher import CFPBRealDataFetcher as RealDataFetcher
-                
-                try:
-                    fetcher = RealDataFetcher()
-                    status_text.text(f"Fetching data for past {months_to_load} months...")
-                    analyzer.filtered_df = fetcher.load_and_filter_data()
-                except Exception as e:
-                    st.error(f"Error loading data: {str(e)}")
-                    import traceback
-                    st.exception(e)
-                    return False
-                
-                if analyzer.filtered_df is None:
-                    st.error("Failed to load pre-filtered real CFPB data. Try 'Full Analysis' to download fresh data.")
-                    return False
-                if len(analyzer.filtered_df) == 0:
-                    st.error(f"No complaints found for the past {months_to_load} months. Try selecting more months or use 'Full Analysis'.")
-                    return False
-                st.success(f"Successfully loaded {len(analyzer.filtered_df):,} complaints for analysis (Quick Analysis - {months_to_load} months)")
-            else:
-                # Full Analysis: force reprocess/download and refresh cache
+            
+            # Use the API fetcher directly
+            try:
+                from analysis.real_data_fetcher_lite import RealDataFetcher
+                status_text.text(f"🌐 Fetching fresh data from CFPB API for {months_to_load} months...")
+                fetcher = RealDataFetcher()
+                analyzer.filtered_df = fetcher.load_and_filter_data()
+            except Exception as e:
+                st.error(f"Failed to fetch from API: {e}")
+                st.info("Trying alternative download method...")
+                # Fallback to full downloader
                 success = analyzer.load_real_data(force_download=True)
-                if not success:
-                    st.error("Failed to load CFPB data")
+                if not success or analyzer.filtered_df is None:
+                    st.error("❌ All download methods failed. CFPB API may be down. Please try again later.")
                     return False
-                st.success(f"Successfully loaded {len(analyzer.filtered_df):,} complaints for analysis (Full Analysis)")
-                # Clear Streamlit cache so next Quick Analysis uses new data
-                get_filtered_real_data.clear()
+            
+            if analyzer.filtered_df is None or len(analyzer.filtered_df) == 0:
+                st.error(f"❌ No data received from CFPB API for the past {months_to_load} months.")
+                st.info("💡 **Try:**\n- Select more months (e.g., 3-6 months)\n- Wait a few minutes and try again\n- CFPB API may be experiencing issues")
+                return False
+            
+            st.success(f"✅ Downloaded {len(analyzer.filtered_df):,} complaints for past {months_to_load} months")
+            progress_bar.progress(60)
             # Generate analysis
             status_text.text("Processing complaint data and generating analysis...")
             progress_bar.progress(60)
