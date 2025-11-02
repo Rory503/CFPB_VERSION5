@@ -1,8 +1,6 @@
 """
 Lightweight real-data fetcher optimized for small memory instances.
-Uses the CFPB Socrata API for a rolling window and supports Lite mode
-that omits long narratives. Falls back to ZIP only when the API path
-is unavailable.
+Downloads full CFPB ZIP file and filters for narratives only.
 """
 
 import os
@@ -10,6 +8,7 @@ import io
 from datetime import datetime, timedelta
 import requests
 import pandas as pd
+import zipfile
 
 
 class RealDataFetcher:
@@ -36,168 +35,156 @@ class RealDataFetcher:
         ]
 
         self.data_dir = "data"
+        self.zip_url = "https://files.consumerfinance.gov/ccdb/complaints.csv.zip"
         os.makedirs(self.data_dir, exist_ok=True)
 
-    def _fetch_api(self):
-        endpoint = "https://data.consumerfinance.gov/resource/s6ew-h6mp.csv"
-        where = (
-            f"date_received between '{self.start_date:%Y-%m-%d}' and '{self.end_date:%Y-%m-%d}'"
-        )
-        if self.include_narratives:
-            where += " AND consumer_complaint_narrative IS NOT NULL"
-        if self.credit_exclusions:
-            not_in = ",".join([f"'{c}'" for c in self.credit_exclusions])
-            where += f" AND product NOT IN({not_in})"
+    def _download_zip(self):
+        """Download the full CFPB complaints ZIP file"""
+        csv_path = os.path.join(self.data_dir, "complaints.csv")
+        zip_path = os.path.join(self.data_dir, "complaints.csv.zip")
         
-        print(f"DEBUG: WHERE clause = {where}")
-
-        select_cols = [
-            "complaint_id",
-            "date_received",
-            "date_sent_to_company",
-            "product",
-            "issue",
-            "company",
-            "state",
-        ]
-        if self.include_narratives:
-            select_cols.append("consumer_complaint_narrative")
-
-        headers = {"Accept": "text/csv"}
-        token = os.environ.get("SOCRATA_APP_TOKEN")
-        if token:
-            headers["X-App-Token"] = token
-
-        batch = 25000
-        offset = 0
-        frames = []
-        total = 0
-
-        while True:
-            params = {
-                "$select": ",".join(select_cols),
-                "$where": where,
-                "$order": "date_received DESC",
-                "$limit": batch,
-                "$offset": offset,
-            }
-            r = requests.get(endpoint, params=params, headers=headers, timeout=90)
-            r.raise_for_status()
-            if not r.text.strip():
-                break
-            chunk = pd.read_csv(io.StringIO(r.text))
-            if chunk.empty:
-                break
-            frames.append(chunk)
-            total += len(chunk)
-            if len(chunk) < batch:
-                break
-            offset += batch
-
-        if not frames:
-            return None
-
-        df = pd.concat(frames, ignore_index=True)
-        df.rename(
-            columns={
-                "complaint_id": "Complaint ID",
-                "date_received": "Date received",
-                "date_sent_to_company": "Date sent to company",
-                "product": "Product",
-                "issue": "Issue",
-                "company": "Company",
-                "state": "State",
-                "consumer_complaint_narrative": "Consumer complaint narrative",
-            },
-            inplace=True,
-        )
-        df["Date received"] = pd.to_datetime(df["Date received"]) 
-        df["Date sent to company"] = pd.to_datetime(df["Date sent to company"], errors="coerce") 
-        for col in ["Product", "Issue", "Company", "State"]:
-            if col in df.columns:
-                df[col] = df[col].astype("category")
-        # Cache a filtered file for quick re-use
+        # Check if we already have recent data
+        if os.path.exists(csv_path):
+            file_age = datetime.now() - datetime.fromtimestamp(os.path.getmtime(csv_path))
+            if file_age.days < 7:  # Data is less than a week old
+                print(f"Using existing data file (age: {file_age.days} days)")
+                return csv_path
+        
+        print(f"Downloading latest CFPB complaint data from {self.zip_url}...")
+        
         try:
-            df.to_csv(os.path.join(self.data_dir, "complaints_filtered.csv"), index=False)
-        except Exception:
-            pass
-        return df
+            # Download the ZIP file
+            response = requests.get(self.zip_url, stream=True, timeout=300)
+            response.raise_for_status()
+            
+            total_size = int(response.headers.get('content-length', 0))
+            print(f"File size: {total_size / (1024*1024):.1f} MB")
+            
+            # Save ZIP file
+            with open(zip_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            
+            print("Extracting CSV file...")
+            
+            # Extract CSV from ZIP
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(self.data_dir)
+            
+            # Clean up ZIP file
+            os.remove(zip_path)
+            
+            print("Download and extraction complete!")
+            return csv_path
+            
+        except Exception as e:
+            print(f"Error downloading ZIP: {e}")
+            return None
 
     def load_and_filter_data(self):
         print(
             f"Loading CFPB data (lite={self.lite_mode}) for window: {self.start_date:%Y-%m-%d} to {self.end_date:%Y-%m-%d}"
         )
         
-        # Detect environment (cloud vs local)
-        is_cloud = os.environ.get('RENDER') or os.environ.get('STREAMLIT_SHARING') or os.environ.get('DYNO')
-        if is_cloud:
-            print("🌐 Cloud environment detected - will download fresh data from CFPB API")
-        else:
-            print("💻 Local environment detected - will try cached data first")
-        
-        # Try cached filtered file first - Accept files up to 30 days old (LOCAL ONLY, or cloud if exists)
+        # Try cached filtered file first
         cache = os.path.join(self.data_dir, "complaints_filtered.csv")
-        if os.path.exists(cache) and not is_cloud:  # Skip cache check in cloud unless file exists
+        if os.path.exists(cache):
             try:
-                # Check cache age - accept files up to 30 days old
                 cache_age = datetime.now() - datetime.fromtimestamp(os.path.getmtime(cache))
-                if cache_age.days < 30:  # Changed from 1 to 30 days
-                    print(f"📁 Using cached file (age: {cache_age.days} days)")
+                if cache_age.days < 30:
+                    print(f"Using cached file (age: {cache_age.days} days)")
                     df = pd.read_csv(cache, low_memory=False)
                     df["Date received"] = pd.to_datetime(df["Date received"]) 
                     df["Date sent to company"] = pd.to_datetime(df["Date sent to company"], errors="coerce")
                     
                     # Filter to the requested date range
-                    print(f"🔍 Filtering data to date range: {self.start_date:%Y-%m-%d} to {self.end_date:%Y-%m-%d}")
+                    print(f"Filtering data to date range: {self.start_date:%Y-%m-%d} to {self.end_date:%Y-%m-%d}")
                     date_mask = (df["Date received"] >= self.start_date) & (df["Date received"] <= self.end_date)
                     df_filtered = df[date_mask].copy()
                     
                     if len(df_filtered) > 0:
-                        print(f"✅ Loaded {len(df_filtered):,} complaints from cache for date range")
+                        print(f"Loaded {len(df_filtered):,} complaints from cache for date range")
                         return df_filtered
-                    else:
-                        print(f"⚠️ No complaints found in date range, trying API...")
-                else:
-                    print(f"⚠️ Cache is {cache_age.days} days old, trying API...")
             except Exception as e:
-                print(f"⚠️ Error loading cache: {e}")
+                print(f"Error loading cache: {e}")
                 pass
 
-        # API fast path - ALWAYS try this in cloud, or if local cache failed
-        try:
-            print(f"🌐 Attempting API fetch from CFPB (fetching {self.start_date:%Y-%m-%d} to {self.end_date:%Y-%m-%d})...")
-            df = self._fetch_api()
-            if df is not None and len(df) > 0:
-                print(f"✅ API fetch successful: {len(df):,} records")
-                return df
-            else:
-                print("⚠️ API returned no data")
-        except Exception as e:
-            print(f"⚠️ API path failed: {type(e).__name__}: {e}")
-            if not is_cloud:  # Only show full traceback locally
-                import traceback
-                traceback.print_exc()
-
-        # Fallback: let the legacy fetcher handle ZIP if really needed (LOCAL ONLY)
-        if not is_cloud:
-            try:
-                print("📦 Attempting legacy ZIP download fallback...")
-                from .real_data_fetcher import CFPBRealDataFetcher as Legacy
-
-                legacy = Legacy()
-                result = legacy.load_and_filter_data()
-                if result is not None and len(result) > 0:
-                    print(f"✅ Legacy ZIP fallback successful: {len(result):,} records")
-                    return result
-                else:
-                    print("⚠️ Legacy ZIP fallback returned no data")
-            except Exception as e:
-                print(f"⚠️ Legacy ZIP path failed: {type(e).__name__}: {e}")
-                import traceback
-                traceback.print_exc()
+        # Download ZIP file and process
+        csv_path = self._download_zip()
+        if not csv_path or not os.path.exists(csv_path):
+            print("Failed to download data file")
+            return None
         
-        print("❌ All data loading methods failed")
-        return None
+        print("Loading CFPB complaint data...")
+        
+        try:
+            # Load data in chunks to handle large file
+            chunk_size = 50000
+            chunks = []
+            
+            for chunk in pd.read_csv(csv_path, chunksize=chunk_size, low_memory=False):
+                chunks.append(chunk)
+                print(f"Loaded {len(chunks) * chunk_size:,} rows...", end="\r")
+            
+            df = pd.concat(chunks, ignore_index=True)
+            print(f"\nTotal complaints loaded: {len(df):,}")
+            
+            # Convert date columns
+            df['Date received'] = pd.to_datetime(df['Date received'])
+            df['Date sent to company'] = pd.to_datetime(df['Date sent to company'], errors='coerce')
+            
+            print("Applying filters...")
+            
+            # 1. Date range filter
+            date_mask = (df['Date received'] >= self.start_date) & (df['Date received'] <= self.end_date)
+            print(f"Date range filter: {date_mask.sum():,} complaints match")
+            
+            # 2. Has narrative filter
+            narrative_mask = (
+                df['Consumer complaint narrative'].notna() & 
+                (df['Consumer complaint narrative'].str.strip() != '')
+            )
+            print(f"Narrative filter: {narrative_mask.sum():,} complaints with narratives")
+            
+            # 3. Exclude credit reporting
+            product_mask = ~df['Product'].isin(self.credit_exclusions)
+            print(f"Excluding credit reporting: {(~product_mask).sum():,} excluded")
+            
+            # Apply all filters
+            filtered_df = df[date_mask & narrative_mask & product_mask].copy()
+            
+            print(f"\nFinal filtered dataset: {len(filtered_df):,} complaints")
+            
+            # Rename columns for consistency
+            col_map = {
+                'consumer_complaint_narrative': 'Consumer complaint narrative',
+                'complaint_id': 'Complaint ID',
+                'date_received': 'Date received',
+                'date_sent_to_company': 'Date sent to company',
+                'product': 'Product',
+                'issue': 'Issue',
+                'company': 'Company',
+                'state': 'State',
+            }
+            for old, new in col_map.items():
+                if old in filtered_df.columns and new not in filtered_df.columns:
+                    filtered_df = filtered_df.rename(columns={old: new})
+            
+            # Cache the filtered file
+            try:
+                filtered_df.to_csv(cache, index=False)
+                print(f"Cached filtered data to {cache}")
+            except Exception:
+                pass
+            
+            return filtered_df
+            
+        except Exception as e:
+            print(f"Error processing data: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
 
     # The following helpers mirror the original fetcher API
     def get_top_trends(self, df, top_n=10):
